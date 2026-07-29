@@ -1,0 +1,95 @@
+@if (documento(); as doc) {
+  <div class="layout">
+    <header class="head">
+      <div class="head__info">
+        <span class="head__area">{{ doc.area }}</span>
+        <h1 class="head__title font-display">{{ doc.titulo }}</h1>
+      </div>
+      <div class="head__meta">
+        <app-progress-badge [respondidas]="respondidas()" />
+        <a class="head__switch" routerLink="/documentos">Trocar documento</a>
+      </div>
+    </header>
+
+    <div class="thread" role="log" aria-live="polite">
+      @if (rounds().length === 0) {
+        <div class="empty">
+          <span class="empty__icon" aria-hidden="true">💬</span>
+          <p class="empty__text">
+            Faça sua primeira pergunta sobre <strong>{{ doc.titulo }}</strong>. Você receberá 3
+            respostas anônimas e escolherá a melhor.
+          </p>
+        </div>
+      }
+
+      @for (round of rounds(); track round.id) {
+        <div class="round">
+          <app-chat-message [pergunta]="round.pergunta" />
+          <app-answer-choice [round]="round" (escolher)="escolher(round.id, $event)" />
+        </div>
+      }
+
+      @if (concluido()) {
+        <div class="done" role="status">
+          <span class="done__icon" aria-hidden="true">🎉</span>
+          <h2 class="done__title font-display">Documento concluído!</h2>
+          <p class="done__text">
+            Você avaliou as {{ maxPerguntas }} perguntas deste documento. Muito obrigado pela sua
+            contribuição — cada escolha ajuda a medir a qualidade das respostas.
+          </p>
+          <div class="done__actions">
+            @if (proximoDocumento(); as prox) {
+              <button type="button" class="btn btn--primary" (click)="irParaProximo()">
+                Avaliar próximo: {{ prox.titulo }}
+              </button>
+            }
+            <button type="button" class="btn btn--secondary" (click)="irParaDocumentos()">
+              Ver todos os documentos
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+
+    @if (!concluido()) {
+      <div class="composer">
+        <label class="composer__label" for="pergunta">
+          Pergunta {{ respondidas() + 1 }} de {{ maxPerguntas }}
+        </label>
+        <div class="composer__row">
+          <textarea
+            id="pergunta"
+            class="composer__input"
+            rows="2"
+            placeholder="Digite sua pergunta sobre o documento…"
+            [value]="rascunho()"
+            [disabled]="pendente()"
+            (input)="onTextarea($event)"
+            (keydown)="onKeydown($event)"
+          ></textarea>
+          <button
+            type="button"
+            class="composer__send"
+            [disabled]="!podePerguntar()"
+            (click)="perguntar()"
+          >
+            Perguntar
+          </button>
+        </div>
+        @if (pendente()) {
+          <p class="composer__hint">Escolha uma das respostas acima para liberar a próxima pergunta.</p>
+        } @else {
+          <p class="composer__hint">Pressione Enter para enviar · Shift+Enter para quebrar linha.</p>
+        }
+      </div>
+    }
+  </div>
+} @else {
+  <div class="missing">
+    <h1 class="missing__title font-display">Documento não encontrado</h1>
+    <p class="missing__text">O documento solicitado não existe ou o link está incorreto.</p>
+    <button type="button" class="btn btn--primary" (click)="irParaDocumentos()">
+      Voltar aos documentos
+    </button>
+  </div>
+}

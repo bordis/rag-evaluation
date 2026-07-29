@@ -1,0 +1,8 @@
+@if (concluido()) {
+  <span class="badge badge--done">
+    <span class="dot" aria-hidden="true"></span>
+    Concluído
+  </span>
+} @else {
+  <span class="badge">{{ respondidas() }}/{{ total() }} perguntas</span>
+}

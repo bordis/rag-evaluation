@@ -1,0 +1,12 @@
+<button type="button" class="card" (click)="onSelecionar()">
+  <span class="card__icon" aria-hidden="true">{{ documento().icone }}</span>
+
+  <span class="card__area">{{ documento().area }}</span>
+  <span class="card__title font-display">{{ documento().titulo }}</span>
+  <span class="card__desc">{{ documento().descricao }}</span>
+
+  <span class="card__footer">
+    <app-progress-badge [respondidas]="respondidas()" />
+    <span class="card__cta">Avaliar →</span>
+  </span>
+</button>

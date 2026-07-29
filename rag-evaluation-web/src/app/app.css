@@ -1,0 +1,50 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  background-color: var(--color-canvas);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  height: 64px;
+  padding: 0 var(--space-lg);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.brand__mark {
+  color: var(--color-ink);
+}
+
+.brand__text {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.topbar__tag {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: var(--color-muted);
+}
+
+.content {
+  display: block;
+}
+
+@media (max-width: 480px) {
+  .topbar__tag {
+    display: none;
+  }
+}

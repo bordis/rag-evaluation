@@ -1,0 +1,33 @@
+<section class="page">
+  <header class="head">
+    <span class="head__eyebrow">Passo 1 de 2</span>
+    <h1 class="head__title font-display">Escolha um documento</h1>
+    <p class="head__lead">
+      Selecione o documento sobre o qual você tem <strong>mais conhecimento</strong>. Você poderá
+      voltar aqui e avaliar outros documentos a qualquer momento.
+    </p>
+    @if (totalConcluidos() > 0) {
+      <p class="head__status">
+        {{ totalConcluidos() }}
+        @if (totalConcluidos() === 1) {
+          documento concluído
+        } @else {
+          documentos concluídos
+        }
+        até agora. Obrigado!
+      </p>
+    }
+  </header>
+
+  <ul class="grid" role="list">
+    @for (doc of documentos(); track doc.id) {
+      <li class="grid__item">
+        <app-document-card
+          [documento]="doc"
+          [respondidas]="respondidas(doc.id)"
+          (selecionar)="abrir($event)"
+        />
+      </li>
+    }
+  </ul>
+</section>

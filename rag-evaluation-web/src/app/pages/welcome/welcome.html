@@ -1,0 +1,31 @@
+<section class="hero">
+  <span class="hero__eyebrow">Avaliação de respostas · Pesquisa de Mestrado</span>
+
+  <h1 class="hero__title font-display">
+    Ajude-nos a descobrir<br />qual resposta é a melhor.
+  </h1>
+
+  <p class="hero__lead">
+    Seja bem-vindo(a), e muito obrigado por participar! Sua avaliação é essencial para medir a
+    qualidade de diferentes configurações de um sistema de perguntas e respostas sobre documentos.
+    Não há resposta certa ou errada — o que importa é a sua percepção.
+  </p>
+
+  <ol class="steps" role="list">
+    @for (passo of passos; track passo.numero) {
+      <li class="step">
+        <span class="step__num font-display">{{ passo.numero }}</span>
+        <div class="step__body">
+          <h2 class="step__title">{{ passo.titulo }}</h2>
+          <p class="step__text">{{ passo.texto }}</p>
+        </div>
+      </li>
+    }
+  </ol>
+
+  <a class="cta" routerLink="/documentos">Começar avaliação</a>
+
+  <p class="hero__note">
+    Leva poucos minutos por documento. Você pode alternar entre documentos quando quiser.
+  </p>
+</section>

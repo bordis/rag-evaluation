@@ -1,0 +1,38 @@
+<div class="intro">
+  <span class="avatar" aria-hidden="true">✳</span>
+  <p class="intro__text">
+    @if (decidida()) {
+      Você escolheu a <strong>Resposta {{ round().escolhaRotulo }}</strong>. Obrigado!
+    } @else {
+      Três respostas foram geradas. Leia com calma e escolha a que você achar melhor.
+    }
+  </p>
+</div>
+
+<ul class="grid" role="list">
+  @for (resposta of round().respostas; track resposta.rotuloCego) {
+    <li
+      class="answer"
+      [class.answer--chosen]="round().escolhaRotulo === resposta.rotuloCego"
+      [class.answer--dimmed]="decidida() && round().escolhaRotulo !== resposta.rotuloCego"
+    >
+      <div class="answer__head">
+        <span class="answer__label">Resposta {{ resposta.rotuloCego }}</span>
+        @if (round().escolhaRotulo === resposta.rotuloCego) {
+          <span class="answer__chip">Escolhida</span>
+        }
+      </div>
+
+      <p class="answer__text">{{ resposta.texto }}</p>
+
+      <button
+        type="button"
+        class="answer__btn"
+        [disabled]="decidida()"
+        (click)="onEscolher(resposta.rotuloCego)"
+      >
+        Escolher esta
+      </button>
+    </li>
+  }
+</ul>
