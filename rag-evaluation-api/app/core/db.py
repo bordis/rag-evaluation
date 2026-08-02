@@ -21,8 +21,9 @@ def rodar_migracoes() -> None:
     """Aplica as migracoes pendentes. Chamada no lifespan para o schema se atualizar sozinho."""
     from pathlib import Path
 
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     raiz = Path(__file__).resolve().parents[2]
     config = Config(str(raiz / "alembic.ini"))

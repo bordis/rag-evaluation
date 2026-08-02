@@ -78,9 +78,7 @@ def test_rotulo_cego_nao_se_repete_na_mesma_rodada(sessao: Session):
     avaliador = EvaluationSession()
     sessao.add(avaliador)
     sessao.commit()
-    rodada = QuestionRound(
-        session_id=avaliador.id, document_id=documento.id, pergunta="pergunta"
-    )
+    rodada = QuestionRound(session_id=avaliador.id, document_id=documento.id, pergunta="pergunta")
     sessao.add(rodada)
     sessao.commit()
 
@@ -99,9 +97,7 @@ def test_pipeline_nao_responde_duas_vezes_na_mesma_rodada(sessao: Session):
     avaliador = EvaluationSession()
     sessao.add(avaliador)
     sessao.commit()
-    rodada = QuestionRound(
-        session_id=avaliador.id, document_id=documento.id, pergunta="pergunta"
-    )
+    rodada = QuestionRound(session_id=avaliador.id, document_id=documento.id, pergunta="pergunta")
     sessao.add(rodada)
     sessao.commit()
 

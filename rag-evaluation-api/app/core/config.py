@@ -7,9 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Configuracao do backend, lida do .env. Falha na subida se faltar algo obrigatorio."""
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # OpenAI — chat
     chat_model: str = "gpt-4.1-mini"
@@ -62,8 +60,7 @@ class Settings(BaseSettings):
         """Converte o formato JDBC herdado dos requisitos para o dialeto do psycopg."""
         host_port = self.db_url.removeprefix("jdbc:").split("://", 1)[-1].rstrip("/")
         return (
-            f"postgresql+psycopg://{self.db_username}:{self.db_password}"
-            f"@{host_port}/{self.db_name}"
+            f"postgresql+psycopg://{self.db_username}:{self.db_password}@{host_port}/{self.db_name}"
         )
 
     @computed_field

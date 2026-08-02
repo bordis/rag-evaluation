@@ -1,8 +1,8 @@
 from logging.config import fileConfig
 
-from alembic import context
 from sqlmodel import SQLModel
 
+from alembic import context
 from app.core.config import get_settings
 from app.models import document, evaluation, pipeline, telemetry  # noqa: F401
 

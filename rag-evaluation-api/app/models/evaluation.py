@@ -3,9 +3,10 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import Column, DateTime
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel, UniqueConstraint
+
+from app.models._types import coluna_enum
 
 
 class Familiaridade(StrEnum):
@@ -30,11 +31,11 @@ class EvaluationSession(SQLModel, table=True):
     area_atuacao: str | None = Field(default=None, max_length=120)
     familiaridade: Familiaridade | None = Field(
         default=None,
-        sa_column=Column(SAEnum(Familiaridade, native_enum=False, length=10), nullable=True),
+        sa_column=Column(coluna_enum(Familiaridade, 10), nullable=True),
     )
     tempo_experiencia: TempoExperiencia | None = Field(
         default=None,
-        sa_column=Column(SAEnum(TempoExperiencia, native_enum=False, length=16), nullable=True),
+        sa_column=Column(coluna_enum(TempoExperiencia, 16), nullable=True),
     )
     criado_em: datetime | None = Field(
         default=None,
@@ -71,9 +72,7 @@ class PipelineAnswer(SQLModel, table=True):
     )
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    round_id: uuid.UUID = Field(
-        foreign_key="question_rounds.id", index=True, ondelete="CASCADE"
-    )
+    round_id: uuid.UUID = Field(foreign_key="question_rounds.id", index=True, ondelete="CASCADE")
     pipeline_id: int = Field(foreign_key="pipelines.id", index=True)
     rotulo_cego: str = Field(max_length=1)
     texto: str

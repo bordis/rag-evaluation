@@ -1,19 +1,21 @@
 """schema inicial
 
-Revision ID: 0de9466ae00b
+Revision ID: 0b153e927ed6
 Revises: 
-Create Date: 2026-08-02 17:19:38.528286
+Create Date: 2026-08-02 17:38:38.740163
 
 """
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+# O autogenerate emite sqlmodel.sql.sqltypes.AutoString() para campos str, mas nao adiciona
+# este import — sem ele a migracao quebra com NameError.
 import sqlmodel
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '0de9466ae00b'
+revision: str = '0b153e927ed6'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -33,7 +35,7 @@ def upgrade() -> None:
     sa.Column('mime_type', sqlmodel.sql.sqltypes.AutoString(length=120), nullable=False),
     sa.Column('tamanho_bytes', sa.Integer(), nullable=False),
     sa.Column('sha256', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=False),
-    sa.Column('status', sa.Enum('PROCESSANDO', 'PRONTO', 'ERRO_PARCIAL', name='statusdocumento', native_enum=False, length=20), server_default='processando', nullable=False),
+    sa.Column('status', sa.Enum('processando', 'pronto', 'erro_parcial', name='statusdocumento', native_enum=False, create_constraint=True, length=20), server_default='processando', nullable=False),
     sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('atualizado_em', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
@@ -43,8 +45,8 @@ def upgrade() -> None:
     op.create_table('evaluation_sessions',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('area_atuacao', sqlmodel.sql.sqltypes.AutoString(length=120), nullable=True),
-    sa.Column('familiaridade', sa.Enum('BAIXA', 'MEDIA', 'ALTA', name='familiaridade', native_enum=False, length=10), nullable=True),
-    sa.Column('tempo_experiencia', sa.Enum('ATE_2_ANOS', 'DE_2_A_5_ANOS', 'DE_5_A_10_ANOS', 'MAIS_10_ANOS', name='tempoexperiencia', native_enum=False, length=16), nullable=True),
+    sa.Column('familiaridade', sa.Enum('baixa', 'media', 'alta', name='familiaridade', native_enum=False, create_constraint=True, length=10), nullable=True),
+    sa.Column('tempo_experiencia', sa.Enum('ate-2-anos', '2-5-anos', '5-10-anos', 'mais-10-anos', name='tempoexperiencia', native_enum=False, create_constraint=True, length=16), nullable=True),
     sa.Column('criado_em', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
@@ -53,7 +55,7 @@ def upgrade() -> None:
     sa.Column('codigo', sqlmodel.sql.sqltypes.AutoString(length=32), nullable=False),
     sa.Column('nome', sqlmodel.sql.sqltypes.AutoString(length=120), nullable=False),
     sa.Column('descricao', sqlmodel.sql.sqltypes.AutoString(length=500), nullable=False),
-    sa.Column('parser', sa.Enum('RAW', 'DOCLING', name='parsertype', native_enum=False, length=16), nullable=False),
+    sa.Column('parser', sa.Enum('raw', 'docling', name='parsertype', native_enum=False, create_constraint=True, length=16), nullable=False),
     sa.Column('collection_name', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=False),
     sa.Column('ativo', sa.Boolean(), nullable=False),
     sa.Column('config', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -66,7 +68,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('document_id', sa.Uuid(), nullable=False),
     sa.Column('pipeline_id', sa.Integer(), nullable=False),
-    sa.Column('status', sa.Enum('PENDENTE', 'PROCESSANDO', 'CONCLUIDA', 'ERRO', name='statusingestao', native_enum=False, length=20), server_default='pendente', nullable=False),
+    sa.Column('status', sa.Enum('pendente', 'processando', 'concluida', 'erro', name='statusingestao', native_enum=False, create_constraint=True, length=20), server_default='pendente', nullable=False),
     sa.Column('erro', sqlmodel.sql.sqltypes.AutoString(length=2000), nullable=True),
     sa.Column('total_caracteres', sa.Integer(), nullable=False),
     sa.Column('total_chunks', sa.Integer(), nullable=False),
@@ -115,7 +117,7 @@ def upgrade() -> None:
     op.create_table('answer_stage_metrics',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('answer_id', sa.Uuid(), nullable=False),
-    sa.Column('etapa', sa.Enum('QUERY_REWRITING', 'EMBEDDING_QUERY', 'RETRIEVAL', 'RERANKING', 'WINDOW_EXPANSION', 'GENERATION', name='etapapipeline', native_enum=False, length=24), nullable=False),
+    sa.Column('etapa', sa.Enum('query_rewriting', 'embedding_query', 'retrieval', 'reranking', 'window_expansion', 'generation', name='etapapipeline', native_enum=False, create_constraint=True, length=24), nullable=False),
     sa.Column('ordem', sa.Integer(), nullable=False),
     sa.Column('duracao_ms', sa.Integer(), nullable=False),
     sa.Column('tokens_prompt', sa.Integer(), nullable=True),

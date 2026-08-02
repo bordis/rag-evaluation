@@ -2,9 +2,10 @@ import uuid
 from enum import StrEnum
 
 from sqlalchemy import Column
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+from app.models._types import coluna_enum
 
 
 class EtapaPipeline(StrEnum):
@@ -22,12 +23,8 @@ class AnswerStageMetric(SQLModel, table=True):
     __tablename__ = "answer_stage_metrics"
 
     id: int | None = Field(default=None, primary_key=True)
-    answer_id: uuid.UUID = Field(
-        foreign_key="pipeline_answers.id", index=True, ondelete="CASCADE"
-    )
-    etapa: EtapaPipeline = Field(
-        sa_column=Column(SAEnum(EtapaPipeline, native_enum=False, length=24), nullable=False)
-    )
+    answer_id: uuid.UUID = Field(foreign_key="pipeline_answers.id", index=True, ondelete="CASCADE")
+    etapa: EtapaPipeline = Field(sa_column=Column(coluna_enum(EtapaPipeline, 24), nullable=False))
     ordem: int
     duracao_ms: int
     tokens_prompt: int | None = Field(default=None)
@@ -43,9 +40,7 @@ class RetrievedChunk(SQLModel, table=True):
     __tablename__ = "retrieved_chunks"
 
     id: int | None = Field(default=None, primary_key=True)
-    answer_id: uuid.UUID = Field(
-        foreign_key="pipeline_answers.id", index=True, ondelete="CASCADE"
-    )
+    answer_id: uuid.UUID = Field(foreign_key="pipeline_answers.id", index=True, ondelete="CASCADE")
     milvus_id: int
     chunk_index: int
     score_denso: float | None = Field(default=None)

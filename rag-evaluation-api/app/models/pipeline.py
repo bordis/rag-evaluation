@@ -2,10 +2,11 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import Column, DateTime
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel
+
+from app.models._types import coluna_enum
 
 
 class ParserType(StrEnum):
@@ -20,9 +21,7 @@ class Pipeline(SQLModel, table=True):
     codigo: str = Field(max_length=32, unique=True, index=True)
     nome: str = Field(max_length=120)
     descricao: str = Field(default="", max_length=500)
-    parser: ParserType = Field(
-        sa_column=Column(SAEnum(ParserType, native_enum=False, length=16), nullable=False)
-    )
+    parser: ParserType = Field(sa_column=Column(coluna_enum(ParserType, 16), nullable=False))
     collection_name: str = Field(max_length=64)
     ativo: bool = Field(default=True)
     config: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))

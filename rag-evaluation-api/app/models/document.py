@@ -3,9 +3,10 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import Column, DateTime
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel
+
+from app.models._types import coluna_enum
 
 
 class StatusDocumento(StrEnum):
@@ -37,7 +38,7 @@ class Document(SQLModel, table=True):
     status: StatusDocumento = Field(
         default=StatusDocumento.PROCESSANDO,
         sa_column=Column(
-            SAEnum(StatusDocumento, native_enum=False, length=20),
+            coluna_enum(StatusDocumento, 20),
             nullable=False,
             server_default=StatusDocumento.PROCESSANDO.value,
         ),
@@ -68,7 +69,7 @@ class DocumentIngestion(SQLModel, table=True):
     status: StatusIngestao = Field(
         default=StatusIngestao.PENDENTE,
         sa_column=Column(
-            SAEnum(StatusIngestao, native_enum=False, length=20),
+            coluna_enum(StatusIngestao, 20),
             nullable=False,
             server_default=StatusIngestao.PENDENTE.value,
         ),

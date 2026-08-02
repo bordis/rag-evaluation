@@ -52,9 +52,7 @@ def _montar_schema(cliente: MilvusClient):
         analyzer_params=ANALISADOR_PORTUGUES,
     )
     schema.add_field(CAMPO_ESPARSO, DataType.SPARSE_FLOAT_VECTOR)
-    schema.add_field(
-        CAMPO_DENSO, DataType.FLOAT_VECTOR, dim=get_settings().embedding_dimensions
-    )
+    schema.add_field(CAMPO_DENSO, DataType.FLOAT_VECTOR, dim=get_settings().embedding_dimensions)
     schema.add_field(CAMPO_METADADOS, DataType.JSON)
     schema.add_function(
         Function(
