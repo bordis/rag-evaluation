@@ -51,6 +51,9 @@ def test_divide_origens_de_cors_separadas_por_virgula():
     assert settings.cors_origin_list == ["http://localhost:4200", "http://localhost:4300"]
 
 
-def test_falta_de_chave_da_openai_impede_a_subida():
+def test_falta_de_chave_da_openai_impede_a_subida(monkeypatch):
+    # O conftest define CHAT_API_KEY no ambiente; sem remover, o Settings a encontraria e
+    # o teste passaria a nao verificar nada.
+    monkeypatch.delenv("CHAT_API_KEY", raising=False)
     with pytest.raises(ValidationError):
         Settings(_env_file=None, db_url="postgresql://localhost:5432")
