@@ -15,3 +15,17 @@ def get_session() -> Iterator[Session]:
 
 
 SessionDep = Annotated[Session, Depends(get_session)]
+
+
+def rodar_migracoes() -> None:
+    """Aplica as migracoes pendentes. Chamada no lifespan para o schema se atualizar sozinho."""
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    raiz = Path(__file__).resolve().parents[2]
+    config = Config(str(raiz / "alembic.ini"))
+    config.set_main_option("script_location", str(raiz / "alembic"))
+    config.set_main_option("sqlalchemy.url", get_settings().sqlalchemy_url)
+    command.upgrade(config, "head")
