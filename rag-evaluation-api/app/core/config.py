@@ -41,6 +41,11 @@ class Settings(BaseSettings):
 
     # Docling
     docling_url: str = "http://localhost:5001"
+    # Converter um PDF grande leva minutos; o timeout de consulta (60s) nao serve aqui.
+    docling_timeout_seconds: int = 600
+    # OCR desligado: os documentos do estudo sao PDFs digitais. Ligado, o Docling carregaria
+    # modelos de visao e o tempo de ingestao deixaria de ser comparavel ao do parser raw.
+    docling_do_ocr: bool = False
 
     # RAG
     rag_search_limit: int = 5
