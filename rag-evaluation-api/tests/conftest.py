@@ -33,3 +33,20 @@ def sessao_fixture(engine_teste):
     if transacao.is_active:
         transacao.rollback()
     conexao.close()
+
+
+@pytest.fixture(name="cliente")
+def cliente_fixture(sessao: Session):
+    """TestClient com a sessao de teste no lugar da real.
+
+    `TestClient(app)` sem `with` nao dispara o lifespan — os testes de contrato nao rodam
+    migracoes nem tocam no Milvus.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.core.db import get_session
+    from app.main import app
+
+    app.dependency_overrides[get_session] = lambda: sessao
+    yield TestClient(app)
+    app.dependency_overrides.clear()
