@@ -7,9 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `rag-evaluation-api` is the backend for the sibling `rag-evaluation-web` Angular app — a Master's-thesis study
 where human evaluators **blindly** pick the best answer among four RAG-pipeline configurations.
 
-**Slice 1 (foundation) is done.** Config, infrastructure, database schema, pipeline seeding, Milvus collections
-and `GET /api/health` all work. **No ingestion, retrieval or evaluation endpoints exist yet** — see
-`docs/superpowers/plans/` at the repo root for the remaining slices (2: ingestion, 3: query, 4: evaluation,
+**Slices 1 (foundation) and 2 (ingestion) are done.** Config, infrastructure, database schema, pipeline seeding,
+Milvus collections, `GET /api/health` and the full ingestion path (`POST /api/documents` → parsing → chunking →
+embedding → indexing, per pipeline, in the background) all work. **No retrieval or evaluation endpoints exist
+yet** — see `docs/superpowers/plans/` at the repo root for the remaining slices (3: query, 4: evaluation,
 5: frontend). Design rationale lives in `docs/superpowers/specs/2026-08-02-rag-evaluation-api-design.md`.
 
 **The four pipelines are a 2×2 factorial design** — this is the point of the whole study, so don't collapse it:
@@ -42,6 +43,21 @@ identical across all four on purpose; varying them would confound the variables.
   the name, which would put `ATE_2_ANOS` in the database while the API serializes `ate-2-anos`.
 - **Alembic's `script.py.mako` adds `import sqlmodel`** — autogenerate emits `sqlmodel.sql.sqltypes.AutoString()`
   without importing it, so generated migrations fail with `NameError` otherwise.
+- **Every pipeline re-does all the work.** Pipelines 1 and 3 produce identical chunks, and reusing them would
+  halve the embedding cost — but it would record zero parsing time for pipeline 3 and corrupt the comparative
+  telemetry the thesis measures. The ingestion orchestrator runs all four arms from scratch, deliberately.
+- **`sparse_vector` is never sent on insert.** The collection's BM25 `Function` derives it from `text`; supplying
+  it makes Milvus reject the row.
+- **Raw `.docx` parsing reads `word/document.xml` directly** (zip + `defusedxml`) instead of using `python-docx`.
+  A library would recover structure, which is exactly what the raw arm must *not* have. `defusedxml` because
+  `xml.etree` is vulnerable to billion-laughs on uploaded XML.
+- **Docling runs with OCR off** (`DOCLING_DO_OCR=false`). The study's documents are digital PDFs; OCR would load
+  vision models and make ingestion time incomparable to the raw parser's.
+- **The blind rule is scoped to evaluation schemas.** `GET /api/documents/{id}/ingestions` exposes
+  `pipeline_codigo` on purpose — it's the researcher's telemetry, and the frontend never calls it. Do not write
+  a global "no schema has a pipeline field" test.
+- **Chunk metadata carries no page or section.** Chunking is character-based over the whole text and identical
+  across all four pipelines; making it page-aware would break that parity. Known, accepted limitation.
 
 ## Architecture (`app/`)
 
@@ -53,7 +69,13 @@ identical across all four on purpose; varying them would confound the variables.
   rounds, answers), `telemetry` (per-stage metrics, retrieved chunks).
 - `schemas/` — Pydantic request/response models, kept **separate** from table models; that separation is what
   guarantees the blind.
-- `api/routers/` — one router per domain. `health.py` exists; the rest come with later slices.
+- `api/routers/` — one router per domain. `health.py` and `documents.py` exist; the rest come with later slices.
+- `rag/` — one file per ingestion stage: `chunking.py`, `parsing/` (`base.py`, `raw.py`, `docling.py`),
+  `embedding.py`, `indexing.py`. Each is testable on its own with no infrastructure running.
+- `services/ingestion.py` — the orchestrator. It reads `parser` and `collection_name` from the database and never
+  names a pipeline; a fifth pipeline would be a table row, not new code. `DependenciasDeIngestao` is the
+  injection point that lets the whole flow be tested with fakes.
+- `telemetry/recorder.py` — `Cronometro`, the per-stage stopwatch.
 - `seed.py` — idempotent seeding of the four pipelines; never overwrites an edited config.
 
 ## Commands
@@ -69,6 +91,8 @@ identical across all four on purpose; varying them would confound the variables.
 - `uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head`. Migrations also run
   automatically in the app lifespan.
 - `uv run ruff check . --fix` and `uv run ruff format .`. `alembic/versions/` is excluded — it's generated code.
+- Integration tests that hit OpenAI cost real money (a few cents per run of
+  `tests/api/test_ingestao_ponta_a_ponta.py`). They are excluded from the default suite.
 
 ## Conventions
 
