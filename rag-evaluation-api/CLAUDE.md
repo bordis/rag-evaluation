@@ -102,3 +102,6 @@ identical across all four on purpose; varying them would confound the variables.
   over `response_model`, no `...` defaults, one HTTP operation per function, router-level `prefix`/`tags`.
 - **SQLModel over plain SQLAlchemy** (same skill). It sits on SQLAlchemy, so Alembic behaves identically.
 - `.env` is gitignored; `.env.example` is versioned with an empty `CHAT_API_KEY`.
+- **`tests/conftest.py` injects a fake `CHAT_API_KEY` only when `.env` has no real one.** Environment variables
+  outrank `.env` in pydantic-settings, so an unconditional `setdefault` would mask the real key and every
+  integration test that calls OpenAI would fail with `AuthenticationError`.

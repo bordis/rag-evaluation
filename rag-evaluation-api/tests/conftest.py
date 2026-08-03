@@ -1,9 +1,27 @@
 import os
+from pathlib import Path
 
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-os.environ.setdefault("CHAT_API_KEY", "sk-teste")
+_ENV = Path(__file__).resolve().parents[1] / ".env"
+
+
+def _env_tem_chave_real() -> bool:
+    if not _ENV.exists():
+        return False
+    return any(
+        linha.startswith("CHAT_API_KEY=") and linha.removeprefix("CHAT_API_KEY=").strip()
+        for linha in (bruta.strip() for bruta in _ENV.read_text(encoding="utf-8").splitlines())
+    )
+
+
+# Sem chave nenhuma o Settings nem instancia e a suite unitaria inteira quebra. Mas a chave falsa
+# so entra quando o .env nao traz uma de verdade: no pydantic-settings a variavel de ambiente tem
+# prioridade sobre o .env, entao um setdefault incondicional mascararia a chave real e derrubaria
+# os testes de integracao que chamam a OpenAI com AuthenticationError.
+if not _env_tem_chave_real():
+    os.environ.setdefault("CHAT_API_KEY", "sk-teste")
 
 # Importar os modulos de modelo registra as tabelas no metadata do SQLModel.
 from app.models import document, evaluation, pipeline, telemetry  # noqa: E402,F401
