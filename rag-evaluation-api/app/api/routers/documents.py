@@ -59,7 +59,7 @@ def enviar_documento(
     conteudo = arquivo.file.read()
     if len(conteudo) > limite:
         raise HTTPException(
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"O arquivo excede o limite de {get_settings().max_upload_mb} MB.",
         )
 
