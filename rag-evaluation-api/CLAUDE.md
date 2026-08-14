@@ -7,11 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `rag-evaluation-api` is the backend for the sibling `rag-evaluation-web` Angular app — a Master's-thesis study
 where human evaluators **blindly** pick the best answer among four RAG-pipeline configurations.
 
-**Slices 1 (foundation) and 2 (ingestion) are done.** Config, infrastructure, database schema, pipeline seeding,
-Milvus collections, `GET /api/health` and the full ingestion path (`POST /api/documents` → parsing → chunking →
-embedding → indexing, per pipeline, in the background) all work. **No retrieval or evaluation endpoints exist
-yet** — see `docs/superpowers/plans/` at the repo root for the remaining slices (3: query, 4: evaluation,
-5: frontend). Design rationale lives in `docs/superpowers/specs/2026-08-02-rag-evaluation-api-design.md`.
+**Slices 1–4 are done and the Angular front-end is wired to them.** Config, infrastructure, database schema,
+pipeline seeding, Milvus collections, `GET /api/health`, the full ingestion path (`POST /api/documents` →
+parsing → chunking → embedding → indexing, per pipeline, in the background), the query orchestrator, and the
+evaluation endpoints (sessions, rounds, choice) all work. **Still missing: the `/pipelines` CRUD and the
+`/stats` analysis endpoints** from the design (§6) — pipeline config is edited directly in the database for now.
+Design rationale lives in `docs/superpowers/specs/2026-08-02-rag-evaluation-api-design.md`; setup and
+document-upload instructions live in the repo-root `README.md`.
 
 **The four pipelines are a 2×2 factorial design** — this is the point of the whole study, so don't collapse it:
 
@@ -58,6 +60,14 @@ identical across all four on purpose; varying them would confound the variables.
   a global "no schema has a pipeline field" test.
 - **Chunk metadata carries no page or section.** Chunking is character-based over the whole text and identical
   across all four pipelines; making it page-aware would break that parity. Known, accepted limitation.
+- **One failing pipeline invalidates the whole round (502).** Offering a choice among three answers would
+  produce a data point that doesn't aggregate with the others. Nothing is persisted in that case.
+- **Only a *decided* round counts toward `MAX_PERGUNTAS`** — asking and walking away doesn't burn the quota.
+- **`services/evaluation.py` flushes between levels.** No table declares a `Relationship`, so the unit of work
+  doesn't know `question_rounds` must precede `pipeline_answers`; without the explicit `flush()` the insert
+  order is undefined and the foreign key blows up.
+- **Threads get a transient copy of the `Pipeline` row** (`_copia_transiente`): `asyncio.to_thread` runs the
+  four pipelines in parallel and the SQLAlchemy `Session` is not thread-safe.
 
 ## Architecture (`app/`)
 
@@ -69,12 +79,17 @@ identical across all four on purpose; varying them would confound the variables.
   rounds, answers), `telemetry` (per-stage metrics, retrieved chunks).
 - `schemas/` — Pydantic request/response models, kept **separate** from table models; that separation is what
   guarantees the blind.
-- `api/routers/` — one router per domain. `health.py` and `documents.py` exist; the rest come with later slices.
+- `api/routers/` — one router per domain: `health.py`, `documents.py`, `sessions.py` (anonymous session +
+  progress) and `evaluation.py` (question, history, choice). `pipelines.py` and `stats.py` are still missing.
 - `rag/` — one file per ingestion stage: `chunking.py`, `parsing/` (`base.py`, `raw.py`, `docling.py`),
   `embedding.py`, `indexing.py`. Each is testable on its own with no infrastructure running.
 - `services/ingestion.py` — the orchestrator. It reads `parser` and `collection_name` from the database and never
   names a pipeline; a fifth pipeline would be a table row, not new code. `DependenciasDeIngestao` is the
   injection point that lets the whole flow be tested with fakes.
+- `services/evaluation.py` — the round orchestrator: runs the active pipelines in parallel
+  (`asyncio.gather` over `asyncio.to_thread`, one `wait_for` each), draws the A–D labels, and persists round,
+  answers, per-stage metrics and retrieved chunks. `DependenciasDeAvaliacao` mirrors the ingestion pattern;
+  `tests/fakes.py` holds the shared doubles.
 - `telemetry/recorder.py` — `Cronometro`, the per-stage stopwatch.
 - `seed.py` — idempotent seeding of the four pipelines; never overwrites an edited config.
 
