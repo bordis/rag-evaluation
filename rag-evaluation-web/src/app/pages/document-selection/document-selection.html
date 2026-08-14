@@ -1,6 +1,6 @@
 <section class="page">
   <header class="head">
-    <span class="head__eyebrow">Passo 1 de 2</span>
+    <span class="head__eyebrow">Passo 2 de 3</span>
     <h1 class="head__title font-display">Escolha um documento</h1>
     <p class="head__lead">
       Selecione o documento sobre o qual você tem <strong>mais conhecimento</strong>. Você poderá
@@ -19,15 +19,36 @@
     }
   </header>
 
-  <ul class="grid" role="list">
-    @for (doc of documentos(); track doc.id) {
-      <li class="grid__item">
-        <app-document-card
-          [documento]="doc"
-          [respondidas]="respondidas(doc.id)"
-          (selecionar)="abrir($event)"
-        />
-      </li>
-    }
-  </ul>
+  @if (erro(); as mensagem) {
+    <div class="aviso aviso--erro" role="alert">
+      <p class="aviso__text">{{ mensagem }}</p>
+      <button type="button" class="btn btn--secondary" (click)="recarregar()">
+        Tentar novamente
+      </button>
+    </div>
+  }
+
+  @if (carregando() && documentos().length === 0) {
+    <p class="aviso" role="status">Carregando documentos…</p>
+  } @else if (documentos().length === 0 && !erro()) {
+    <div class="aviso" role="status">
+      <p class="aviso__text">
+        Nenhum documento disponível ainda. Assim que o pesquisador publicar um documento, ele
+        aparece aqui.
+      </p>
+    </div>
+  } @else {
+    <ul class="grid" role="list">
+      @for (doc of documentos(); track doc.slug) {
+        <li class="grid__item">
+          <app-document-card
+            [documento]="doc"
+            [respondidas]="respondidas(doc.slug)"
+            [total]="maxPerguntas()"
+            (selecionar)="abrir($event)"
+          />
+        </li>
+      }
+    </ul>
+  }
 </section>

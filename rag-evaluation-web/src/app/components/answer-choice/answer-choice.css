@@ -28,9 +28,11 @@
   color: var(--color-body);
 }
 
+/* Quatro respostas: 2x2 em telas largas — em quatro colunas a coluna fica estreita demais para
+   um texto que o avaliador precisa comparar com calma. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-md);
   margin: 0;
   padding: 0;

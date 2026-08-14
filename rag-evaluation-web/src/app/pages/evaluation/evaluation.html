@@ -6,18 +6,18 @@
         <h1 class="head__title font-display">{{ doc.titulo }}</h1>
       </div>
       <div class="head__meta">
-        <app-progress-badge [respondidas]="respondidas()" />
+        <app-progress-badge [respondidas]="respondidas()" [total]="maxPerguntas()" />
         <a class="head__switch" routerLink="/documentos">Trocar documento</a>
       </div>
     </header>
 
     <div class="thread" role="log" aria-live="polite">
-      @if (rounds().length === 0) {
+      @if (rounds().length === 0 && !carregando() && !gerando()) {
         <div class="empty">
           <span class="empty__icon" aria-hidden="true">💬</span>
           <p class="empty__text">
-            Faça sua primeira pergunta sobre <strong>{{ doc.titulo }}</strong>. Você receberá 3
-            respostas anônimas e escolherá a melhor.
+            Faça sua primeira pergunta sobre <strong>{{ doc.titulo }}</strong
+            >. Você receberá respostas anônimas e escolherá a melhor.
           </p>
         </div>
       }
@@ -29,12 +29,27 @@
         </div>
       }
 
+      @if (gerando()) {
+        <div class="pensando" role="status">
+          <span class="pensando__dots" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </span>
+          <p class="pensando__text">
+            Gerando as respostas em todas as configurações… isso costuma levar alguns segundos.
+          </p>
+        </div>
+      }
+
+      @if (erro(); as mensagem) {
+        <p class="falha" role="alert">{{ mensagem }}</p>
+      }
+
       @if (concluido()) {
         <div class="done" role="status">
           <span class="done__icon" aria-hidden="true">🎉</span>
           <h2 class="done__title font-display">Documento concluído!</h2>
           <p class="done__text">
-            Você avaliou as {{ maxPerguntas }} perguntas deste documento. Muito obrigado pela sua
+            Você avaliou as {{ maxPerguntas() }} perguntas deste documento. Muito obrigado pela sua
             contribuição — cada escolha ajuda a medir a qualidade das respostas.
           </p>
           <div class="done__actions">
@@ -54,7 +69,7 @@
     @if (!concluido()) {
       <div class="composer">
         <label class="composer__label" for="pergunta">
-          Pergunta {{ respondidas() + 1 }} de {{ maxPerguntas }}
+          Pergunta {{ respondidas() + 1 }} de {{ maxPerguntas() }}
         </label>
         <div class="composer__row">
           <textarea
@@ -63,7 +78,7 @@
             rows="2"
             placeholder="Digite sua pergunta sobre o documento…"
             [value]="rascunho()"
-            [disabled]="pendente()"
+            [disabled]="pendente() || gerando()"
             (input)="onTextarea($event)"
             (keydown)="onKeydown($event)"
           ></textarea>
@@ -73,21 +88,39 @@
             [disabled]="!podePerguntar()"
             (click)="perguntar()"
           >
-            Perguntar
+            @if (gerando()) {
+              Gerando…
+            } @else {
+              Perguntar
+            }
           </button>
         </div>
         @if (pendente()) {
-          <p class="composer__hint">Escolha uma das respostas acima para liberar a próxima pergunta.</p>
+          <p class="composer__hint">
+            Escolha uma das respostas acima para liberar a próxima pergunta.
+          </p>
         } @else {
-          <p class="composer__hint">Pressione Enter para enviar · Shift+Enter para quebrar linha.</p>
+          <p class="composer__hint">
+            Pressione Enter para enviar · Shift+Enter para quebrar linha.
+          </p>
         }
       </div>
     }
   </div>
+} @else if (carregando()) {
+  <div class="missing">
+    <p class="missing__text" role="status">Carregando documento…</p>
+  </div>
 } @else {
   <div class="missing">
     <h1 class="missing__title font-display">Documento não encontrado</h1>
-    <p class="missing__text">O documento solicitado não existe ou o link está incorreto.</p>
+    <p class="missing__text">
+      @if (erro(); as mensagem) {
+        {{ mensagem }}
+      } @else {
+        O documento solicitado não existe, ainda está em processamento ou o link está incorreto.
+      }
+    </p>
     <button type="button" class="btn btn--primary" (click)="irParaDocumentos()">
       Voltar aos documentos
     </button>

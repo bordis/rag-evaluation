@@ -86,6 +86,70 @@
   color: var(--color-body);
 }
 
+/* Espera das quatro gerações: alguns segundos em que a tela nao pode parecer travada. */
+.pensando {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  background-color: var(--color-surface-soft);
+  border-radius: var(--radius-lg);
+}
+
+.pensando__dots {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.pensando__dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  animation: pulsar 1.2s ease-in-out infinite;
+}
+
+.pensando__dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.pensando__dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes pulsar {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pensando__dots span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.pensando__text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-body);
+}
+
+.falha {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-lg);
+  background-color: color-mix(in srgb, var(--color-error) 8%, var(--color-canvas));
+  font-size: 14px;
+  color: var(--color-body-strong);
+}
+
 .done {
   display: flex;
   flex-direction: column;

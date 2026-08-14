@@ -6,7 +6,7 @@
   <span class="card__desc">{{ documento().descricao }}</span>
 
   <span class="card__footer">
-    <app-progress-badge [respondidas]="respondidas()" />
+    <app-progress-badge [respondidas]="respondidas()" [total]="total()" />
     <span class="card__cta">Avaliar →</span>
   </span>
 </button>

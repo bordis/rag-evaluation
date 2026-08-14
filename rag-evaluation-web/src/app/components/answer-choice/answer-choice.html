@@ -2,9 +2,11 @@
   <span class="avatar" aria-hidden="true">✳</span>
   <p class="intro__text">
     @if (decidida()) {
-      Você escolheu a <strong>Resposta {{ round().escolhaRotulo }}</strong>. Obrigado!
+      Você escolheu a <strong>Resposta {{ round().escolhaRotulo }}</strong
+      >. Obrigado!
     } @else {
-      Três respostas foram geradas. Leia com calma e escolha a que você achar melhor.
+      {{ round().respostas.length }} respostas foram geradas. Leia com calma e escolha a que você
+      achar melhor.
     }
   </p>
 </div>

@@ -14,17 +14,20 @@ export class Welcome {
     {
       numero: '1',
       titulo: 'Escolha um documento',
-      texto: 'Selecione, entre os documentos disponíveis, aquele sobre o qual você tem mais conhecimento.',
+      texto:
+        'Selecione, entre os documentos disponíveis, aquele sobre o qual você tem mais conhecimento.',
     },
     {
       numero: '2',
       titulo: 'Faça perguntas',
-      texto: 'Converse com o documento como em um chat. Você pode fazer até 10 perguntas por documento.',
+      texto:
+        'Converse com o documento como em um chat. Você pode fazer até 10 perguntas por documento.',
     },
     {
       numero: '3',
       titulo: 'Escolha a melhor resposta',
-      texto: 'Para cada pergunta, apresentamos 3 respostas anônimas (A, B e C). Escolha a que mais lhe agradar.',
+      texto:
+        'Para cada pergunta, apresentamos 4 respostas anônimas (A, B, C e D). Escolha a que mais lhe agradar.',
     },
   ];
 }

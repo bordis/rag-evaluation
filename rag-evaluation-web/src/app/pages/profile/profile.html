@@ -1,0 +1,75 @@
+<section class="page">
+  <header class="head">
+    <span class="head__eyebrow">Passo 1 de 3</span>
+    <h1 class="head__title font-display">Um pouco sobre você</h1>
+    <p class="head__lead">
+      Estas três perguntas são <strong>opcionais</strong> e servem apenas para agrupar as respostas
+      na análise. Nada aqui identifica você — a participação é anônima.
+    </p>
+  </header>
+
+  <form class="form" (submit)="$event.preventDefault(); continuar()">
+    <div class="field">
+      <label class="field__label" for="area">Área de atuação</label>
+      <input
+        id="area"
+        class="field__input"
+        type="text"
+        maxlength="120"
+        autocomplete="off"
+        placeholder="Ex.: Direito digital, Nutrição, Infraestrutura…"
+        [value]="areaAtuacao()"
+        (input)="onArea($event)"
+      />
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="familiaridade">
+        Familiaridade com o assunto dos documentos
+      </label>
+      <select
+        id="familiaridade"
+        class="field__input"
+        [value]="familiaridade()"
+        (change)="onFamiliaridade($event)"
+      >
+        <option value="">Prefiro não informar</option>
+        @for (opcao of familiaridades; track opcao.valor) {
+          <option [value]="opcao.valor">{{ opcao.rotulo }}</option>
+        }
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="tempo">Tempo de experiência na área</label>
+      <select
+        id="tempo"
+        class="field__input"
+        [value]="tempoExperiencia()"
+        (change)="onTempo($event)"
+      >
+        <option value="">Prefiro não informar</option>
+        @for (opcao of tempos; track opcao.valor) {
+          <option [value]="opcao.valor">{{ opcao.rotulo }}</option>
+        }
+      </select>
+    </div>
+
+    @if (erro(); as mensagem) {
+      <p class="falha" role="alert">{{ mensagem }}</p>
+    }
+
+    <div class="actions">
+      <button type="submit" class="btn btn--primary" [disabled]="enviando()">
+        @if (enviando()) {
+          Iniciando…
+        } @else {
+          Continuar
+        }
+      </button>
+      <button type="button" class="btn btn--ghost" [disabled]="enviando()" (click)="pular()">
+        Pular esta etapa
+      </button>
+    </div>
+  </form>
+</section>

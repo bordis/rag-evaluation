@@ -7,6 +7,11 @@ export const routes: Routes = [
     title: 'Avaliação de Pipeline RAG',
   },
   {
+    path: 'perfil',
+    loadComponent: () => import('./pages/profile/profile').then((m) => m.Profile),
+    title: 'Seu perfil · Avaliação RAG',
+  },
+  {
     path: 'documentos',
     loadComponent: () =>
       import('./pages/document-selection/document-selection').then((m) => m.DocumentSelection),

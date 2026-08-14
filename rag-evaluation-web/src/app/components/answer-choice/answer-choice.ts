@@ -3,9 +3,10 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import type { QuestionRound, RotuloCego } from '../../models/evaluation-model';
 
 /**
- * Apresenta as 3 respostas candidatas ÀS CEGAS (rótulos A/B/C) e permite ao
+ * Apresenta as respostas candidatas ÀS CEGAS (rótulos A/B/C/D) e permite ao
  * avaliador escolher a preferida. Depois de decidida a rodada, destaca a
- * escolha e desabilita as ações. Nunca revela o pipeline verdadeiro.
+ * escolha e desabilita as ações. A identidade do pipeline nem chega ao
+ * navegador — a API não a envia.
  */
 @Component({
   selector: 'app-answer-choice',
@@ -18,7 +19,7 @@ export class AnswerChoice {
 
   readonly escolher = output<RotuloCego>();
 
-  protected readonly decidida = computed(() => !!this.round().escolhaPipeline);
+  protected readonly decidida = computed(() => !!this.round().escolhaRotulo);
 
   protected onEscolher(rotulo: RotuloCego): void {
     if (this.decidida()) {
