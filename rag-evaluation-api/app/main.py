@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session
 
-from app.api.routers import documents, health
+from app.api.routers import documents, evaluation, health, sessions
 from app.core.config import get_settings
 from app.core.db import engine, rodar_migracoes
 from app.core.milvus import construir_cliente, criar_collections
@@ -39,3 +39,5 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(documents.router)
+app.include_router(sessions.router)
+app.include_router(evaluation.router)
