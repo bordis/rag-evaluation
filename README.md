@@ -369,6 +369,6 @@ npx prettier --write .           # formatação
 # Sistema visual
 
 O front segue [`rag-evaluation-web/DESIGN.md`](rag-evaluation-web/DESIGN.md) (tipografia editorial
-serifada, com a paleta da Procempa). Os tokens são espelhados como CSS custom properties em
+serifada, com a paleta alterada para tons azuis). Os tokens são espelhados como CSS custom properties em
 `src/styles.css` — **nunca use hex inline nos componentes**. Fontes: Cormorant Garamond, Inter e
 JetBrains Mono, carregadas do Google Fonts em `src/index.html`.
