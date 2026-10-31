@@ -55,6 +55,40 @@ def _busca_hibrida(
     )
 
 
+def _busca_esparsa(cliente, collection_name: str, filtro: str, query: str, limite: int):
+    return cliente.search(
+        collection_name=collection_name,
+        data=[query],
+        anns_field=CAMPO_ESPARSO,
+        search_params={"metric_type": "BM25"},
+        limit=limite,
+        filter=filtro,
+        output_fields=CAMPOS_DE_SAIDA,
+    )
+
+
+def buscar_parcelas(
+    cliente,
+    collection_name: str,
+    document_id: uuid.UUID,
+    query: str,
+    vetor: list[float],
+    *,
+    limite: int,
+) -> tuple[list[Candidato], list[Candidato]]:
+    """Refaz as duas buscas so para registro: o `hybrid_search` nao devolve as parcelas do RRF.
+
+    Fica fora do cronometro da etapa de retrieval, para nao inflar o custo medido do pipeline.
+    """
+    filtro = f'{CAMPO_DOCUMENTO} == "{document_id}"'
+    densos = _busca_densa(cliente, collection_name, filtro, vetor, limite)
+    esparsos = _busca_esparsa(cliente, collection_name, filtro, query, limite)
+    return (
+        [candidato_de_hit(hit) for hit in (densos[0] if densos else [])],
+        [candidato_de_hit(hit) for hit in (esparsos[0] if esparsos else [])],
+    )
+
+
 def buscar(
     cliente,
     collection_name: str,
@@ -77,7 +111,7 @@ def buscar(
     candidatos = [candidato_de_hit(hit) for hit in (resultados[0] if resultados else [])]
     if not hibrido:
         # Na busca densa o score e a similaridade de cosseno; no RRF e um score fundido do qual
-        # nao da para extrair as parcelas, entao la os dois campos ficam nulos.
+        # nao da para extrair as parcelas; quem preenche os dois campos e `buscar_parcelas`.
         for candidato in candidatos:
             candidato.score_denso = candidato.score_final
 

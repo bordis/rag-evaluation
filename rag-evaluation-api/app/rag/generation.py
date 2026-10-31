@@ -41,5 +41,9 @@ def gerar_resposta(
             cliente=cliente,
         )
 
-    detalhes = {"trechos": len(candidatos), "sem_contexto": not candidatos}
+    detalhes = {
+        "trechos": len(candidatos),
+        "caracteres": sum(len(candidato.texto) for candidato in candidatos),
+        "sem_contexto": not candidatos,
+    }
     return resposta.texto, metrica_de_llm(EtapaPipeline.GENERATION, relogio.ms, resposta, detalhes)

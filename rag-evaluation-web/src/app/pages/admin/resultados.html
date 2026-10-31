@@ -1,0 +1,345 @@
+<a class="adm-voltar" routerLink="/admin/estudos">← Estudos</a>
+<h1 class="adm-titulo font-display">Resultados</h1>
+
+@if (erro(); as mensagem) {
+  <p class="adm-erro" role="alert">{{ mensagem }}</p>
+}
+@if (aviso(); as mensagem) {
+  <p class="adm-aviso" role="status">{{ mensagem }}</p>
+}
+
+<div class="adm-acoes">
+  <a class="adm-btn" [href]="urlCsv()">Exportar CSV</a>
+  <button
+    class="adm-btn"
+    type="button"
+    [disabled]="disparando() || ragas()?.em_andamento"
+    (click)="calcularRagas()"
+  >
+    @if (ragas()?.em_andamento) {
+      Calculando RAGAS…
+    } @else {
+      Calcular RAGAS do estudo (gasta créditos)
+    }
+  </button>
+  <button class="adm-btn" type="button" [disabled]="atualizando()" (click)="carregar()">
+    @if (atualizando()) {
+      Atualizando…
+    } @else {
+      Atualizar
+    }
+  </button>
+  @if (atualizadoEm(); as momento) {
+    <span class="adm-pequeno" role="status">Atualizado às {{ momento | date: 'HH:mm:ss' }}</span>
+  }
+</div>
+
+@if (ragas(); as situacao) {
+  <section class="adm-cartao" aria-labelledby="ragas-andamento">
+    <strong id="ragas-andamento">
+      @if (situacao.em_andamento) {
+        Calculando RAGAS: {{ situacao.avaliadas + situacao.com_erro }} de {{ situacao.total }}
+        respostas processadas
+      } @else if (situacao.total === 0) {
+        RAGAS: ainda não há rodadas decididas para calcular
+      } @else {
+        RAGAS: {{ situacao.avaliadas }} de {{ situacao.total }} respostas com nota
+      }
+    </strong>
+    @if (situacao.em_andamento) {
+      <progress
+        class="adm-progresso"
+        aria-labelledby="ragas-andamento"
+        [max]="situacao.total"
+        [value]="situacao.avaliadas + situacao.com_erro"
+      ></progress>
+    }
+    @if (situacao.com_erro > 0) {
+      <p class="adm-erro">
+        Respostas com falha: {{ situacao.com_erro }}. Último erro: {{ situacao.ultimo_erro }}
+        @if (!situacao.em_andamento) {
+          <br />
+          Clique em "Calcular RAGAS do estudo" para repetir só as que falharam.
+        }
+      </p>
+    }
+  </section>
+}
+
+@if (dados(); as stats) {
+  <p>
+    {{ stats.rodadas_decididas }} rodadas decididas · {{ stats.avaliadores }} avaliadores · "nenhuma
+    está correta" em {{ stats.nenhuma.sucessos }} ({{ stats.nenhuma.taxa ?? 0 | percent: '1.1-1' }})
+  </p>
+
+  <h2 class="adm-subtitulo">Taxa de vitória (acaso: {{ stats.acaso | percent }})</h2>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Pipeline</th>
+        <th>Vitórias</th>
+        <th>Taxa</th>
+        <th>IC 95% (Wilson)</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of stats.por_pipeline; track item.codigo) {
+        <tr>
+          <td>{{ item.codigo }}</td>
+          <td>{{ item.sucessos }} / {{ item.total }}</td>
+          <td>{{ item.taxa ?? 0 | percent: '1.1-1' }}</td>
+          <td>{{ intervalo(item.ic95) }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <h2 class="adm-subtitulo">Efeitos do desenho 2×2 (hipótese nula: 50%)</h2>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Efeito</th>
+        <th>Rodadas</th>
+        <th>Taxa</th>
+        <th>IC 95% (Wilson)</th>
+        <th>IC 95% (bootstrap por avaliador)</th>
+        <th>p (binomial exato)</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of stats.efeitos; track item.efeito) {
+        <tr>
+          <td>{{ item.descricao }}</td>
+          <td>{{ item.sucessos }} / {{ item.total }}</td>
+          <td>{{ item.taxa ?? 0 | percent: '1.1-1' }}</td>
+          <td>{{ intervalo(item.ic95) }}</td>
+          <td>{{ intervalo(item.ic95_bootstrap) }}</td>
+          <td>{{ item.p_valor === null ? '—' : (item.p_valor | number: '1.3-3') }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <h2 class="adm-subtitulo">Viés de posição</h2>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Posição exibida</th>
+        <th>Escolhas</th>
+        <th>Taxa</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of stats.por_posicao; track item.posicao) {
+        <tr>
+          <td>{{ item.posicao }}</td>
+          <td>{{ item.sucessos }} / {{ item.total }}</td>
+          <td>{{ item.taxa ?? 0 | percent: '1.1-1' }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <h2 class="adm-subtitulo">Tempo e fadiga por ordem da rodada</h2>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Ordem</th>
+        <th>Rodadas</th>
+        <th>"Nenhuma"</th>
+        <th>Tempo ativo mediano</th>
+        <th>Escolheu a posição 1</th>
+        <th>Escolheu recuperação avançada</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of stats.por_ordem; track item.ordem) {
+        <tr>
+          <td>{{ item.ordem }}</td>
+          <td>{{ item.rodadas }}</td>
+          <td>{{ item.nenhuma }}</td>
+          <td>
+            {{
+              item.tempo_ativo_mediano_ms === null
+                ? '—'
+                : (item.tempo_ativo_mediano_ms / 1000 | number: '1.1-1') + ' s'
+            }}
+          </td>
+          <td>{{ item.taxa_posicao_1 === null ? '—' : (item.taxa_posicao_1 | percent) }}</td>
+          <td>{{ item.taxa_avancado === null ? '—' : (item.taxa_avancado | percent) }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <h2 class="adm-subtitulo">Por documento</h2>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Documento</th>
+        <th>Rodadas</th>
+        <th>"Nenhuma"</th>
+        @for (item of stats.por_pipeline; track item.codigo) {
+          <th>{{ item.codigo }}</th>
+        }
+      </tr>
+    </thead>
+    <tbody>
+      @for (documento of stats.por_documento; track documento.documento) {
+        <tr>
+          <td>{{ documento.documento }}</td>
+          <td>{{ documento.rodadas }}</td>
+          <td>{{ documento.nenhuma }}</td>
+          @for (item of stats.por_pipeline; track item.codigo) {
+            <td>{{ documento.vitorias[item.codigo] }}</td>
+          }
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  <h2 class="adm-subtitulo">Custo por resposta</h2>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Pipeline</th>
+        <th>Respostas</th>
+        <th>Latência p50</th>
+        <th>Latência p95</th>
+        <th>Tokens (média)</th>
+        <th>US$ (média)</th>
+        <th>US$ (total)</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of stats.custo.por_pipeline; track item.codigo) {
+        <tr>
+          <td>{{ item.codigo }}</td>
+          <td>{{ item.respostas }}</td>
+          <td>{{ item.ms_p50 ?? 0 | number: '1.0-0' }} ms</td>
+          <td>{{ item.ms_p95 ?? 0 | number: '1.0-0' }} ms</td>
+          <td>{{ item.tokens_medio ?? 0 | number: '1.0-0' }}</td>
+          <td>{{ item.usd_medio ?? 0 | number: '1.5-5' }}</td>
+          <td>{{ item.usd_total | number: '1.4-4' }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  <p class="adm-pequeno">Não inclui a descrição de imagens na ingestão.</p>
+
+  <details>
+    <summary>Custo por etapa</summary>
+    <table class="adm-tabela">
+      <thead>
+        <tr>
+          <th>Pipeline</th>
+          <th>Etapa</th>
+          <th>Execuções</th>
+          <th>p50 (ms)</th>
+          <th>p95 (ms)</th>
+          <th>Tokens</th>
+          <th>US$</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of stats.custo.por_etapa; track item.codigo + item.etapa) {
+          <tr>
+            <td>{{ item.codigo }}</td>
+            <td>{{ item.etapa }}</td>
+            <td>{{ item.execucoes }}</td>
+            <td>{{ item.ms_p50 ?? 0 | number: '1.0-0' }}</td>
+            <td>{{ item.ms_p95 ?? 0 | number: '1.0-0' }}</td>
+            <td>{{ item.tokens_medio === null ? '—' : (item.tokens_medio | number: '1.0-0') }}</td>
+            <td>{{ item.usd_medio === null ? '—' : (item.usd_medio | number: '1.5-5') }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </details>
+
+  <details>
+    <summary>Ingestão (acervo inteiro)</summary>
+    <table class="adm-tabela">
+      <thead>
+        <tr>
+          <th>Pipeline</th>
+          <th>Documentos</th>
+          <th>Parsing (ms, média)</th>
+          <th>Total (ms, média)</th>
+          <th>Chunks (média)</th>
+          <th>Tokens de embedding</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of stats.custo.ingestao; track item.codigo) {
+          <tr>
+            <td>{{ item.codigo }}</td>
+            <td>{{ item.documentos }}</td>
+            <td>{{ item.parsing_ms_medio | number: '1.0-0' }}</td>
+            <td>{{ item.total_ms_medio | number: '1.0-0' }}</td>
+            <td>{{ item.chunks_medio | number: '1.0-1' }}</td>
+            <td>{{ item.tokens_embedding_total }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </details>
+
+  <h2 class="adm-subtitulo">RAGAS × escolha humana</h2>
+  <p>
+    {{ stats.ragas.respostas_avaliadas }} respostas com nota. Concordância: em quantas rodadas o
+    pipeline de maior nota foi o escolhido pelo avaliador.
+    @if (stats.ragas.kendall_tau_ordenacao !== null) {
+      Tau de Kendall da ordenação agregada, apenas descritivo com 4 itens:
+      {{ stats.ragas.kendall_tau_ordenacao | number: '1.2-2' }}.
+    }
+  </p>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Métrica</th>
+        <th>Rodadas</th>
+        <th>Concordância</th>
+        <th>Acaso</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of stats.ragas.concordancia; track item.metrica) {
+        <tr>
+          <td>{{ item.metrica }}</td>
+          <td>{{ item.rodadas }}</td>
+          <td>{{ item.concordancia === null ? '—' : (item.concordancia | percent: '1.1-1') }}</td>
+          <td>{{ item.acaso | percent }}</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  <table class="adm-tabela">
+    <thead>
+      <tr>
+        <th>Pipeline</th>
+        <th>Média</th>
+        <th>Fidelidade</th>
+        <th>Relevância</th>
+        <th>Precisão do contexto</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of stats.ragas.media_por_pipeline; track item.codigo) {
+        <tr>
+          <td>{{ item.codigo }}</td>
+          <td>{{ item.media === null ? '—' : (item.media | number: '1.2-2') }}</td>
+          <td>{{ item.fidelidade === null ? '—' : (item.fidelidade | number: '1.2-2') }}</td>
+          <td>
+            {{
+              item.relevancia_resposta === null ? '—' : (item.relevancia_resposta | number: '1.2-2')
+            }}
+          </td>
+          <td>
+            {{ item.precisao_contexto === null ? '—' : (item.precisao_contexto | number: '1.2-2') }}
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

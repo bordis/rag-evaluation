@@ -91,15 +91,15 @@ def test_upload_cria_as_quatro_linhas_de_ingestao_pendentes(cliente, sessao, age
     assert all(item.status == StatusIngestao.PENDENTE for item in ingestoes)
 
 
-def test_markdown_sem_content_type_util_e_resolvido_pela_extensao(cliente, sessao, agendadas):
+def test_pdf_sem_content_type_util_e_resolvido_pela_extensao(cliente, sessao, agendadas):
     resposta = cliente.post(
         "/api/documents",
         data=_formulario(slug="manual"),
-        files={"arquivo": ("manual.md", b"# Titulo", "application/octet-stream")},
+        files={"arquivo": ("manual.pdf", b"%PDF-1.4", "application/octet-stream")},
     )
     assert resposta.status_code == 202
     documento = sessao.exec(select(Document).where(Document.slug == "manual")).one()
-    assert documento.mime_type == "text/markdown"
+    assert documento.mime_type == "application/pdf"
 
 
 def test_tipo_nao_suportado_responde_415(cliente, agendadas):
@@ -119,7 +119,7 @@ def test_arquivo_acima_do_limite_responde_413(cliente, agendadas):
     resposta = cliente.post(
         "/api/documents",
         data=_formulario(),
-        files={"arquivo": ("grande.txt", excesso, "text/plain")},
+        files={"arquivo": ("grande.pdf", excesso, "application/pdf")},
     )
     assert resposta.status_code == 413
     assert agendadas == []
@@ -239,3 +239,13 @@ def test_exclusao_limpa_as_quatro_collections_e_o_banco(cliente, sessao, monkeyp
 def test_exclusao_de_documento_inexistente_responde_404(cliente, monkeypatch):
     monkeypatch.setattr("app.api.routers.documents.construir_cliente", lambda: MilvusFalso())
     assert cliente.delete(f"/api/documents/{uuid.uuid4()}").status_code == 404
+
+
+def test_acervo_so_aceita_pdf(cliente):
+    resposta = cliente.post(
+        "/api/documents",
+        files={"arquivo": ("notas.txt", b"texto", "text/plain")},
+        data={"slug": "notas", "titulo": "Notas", "area": "Geral"},
+    )
+
+    assert resposta.status_code == 415

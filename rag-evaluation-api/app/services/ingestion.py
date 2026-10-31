@@ -73,6 +73,10 @@ def _ingerir_em_pipeline(
                 parsear = dependencias.obter_parser(pipeline.parser)
                 resultado = parsear(conteudo, mime_type, nome_arquivo)
             caracteres = len(resultado.texto)
+            for campo in ("paginas", "tabelas", "imagens"):
+                if campo in resultado.metadados:
+                    setattr(documento, campo, resultado.metadados[campo])
+            sessao.add(documento)
 
             with chunking:
                 chunks = dividir_em_chunks(
@@ -91,7 +95,7 @@ def _ingerir_em_pipeline(
                     documento.id,
                     chunks,
                     embeddings.vetores,
-                    {**resultado.metadados, "slug": documento.slug},
+                    {"parser": resultado.metadados.get("parser"), "slug": documento.slug},
                 )
     except Exception as erro:  # noqa: BLE001 — a falha de um pipeline nao derruba os outros
         ingestao.status = StatusIngestao.ERRO

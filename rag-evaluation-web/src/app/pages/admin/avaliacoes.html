@@ -1,0 +1,43 @@
+<a class="adm-voltar" routerLink="/admin/estudos">← Estudos</a>
+<h1 class="adm-titulo font-display">Avaliações</h1>
+
+@if (erro(); as mensagem) {
+  <p class="adm-erro" role="alert">{{ mensagem }}</p>
+}
+
+<table class="adm-tabela">
+  <thead>
+    <tr>
+      <th>Documento</th>
+      <th>Avaliador (código)</th>
+      <th>Rodadas</th>
+      <th>Decididas</th>
+      <th>"Nenhuma"</th>
+      <th>Início</th>
+      <th>Última escolha</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (item of avaliacoes(); track item.session_id + item.document_id) {
+      <tr>
+        <td>{{ item.documento_titulo }}</td>
+        <td>
+          <code>{{ item.session_id.slice(0, 8) }}</code>
+        </td>
+        <td>{{ item.rodadas }}</td>
+        <td>{{ item.decididas }}</td>
+        <td>{{ item.nenhuma }}</td>
+        <td>{{ item.inicio | date: 'dd/MM/yy HH:mm' }}</td>
+        <td>{{ item.fim | date: 'dd/MM/yy HH:mm' }}</td>
+        <td>
+          <a [routerLink]="['/admin/avaliacoes', item.session_id, item.document_id]">Abrir</a>
+        </td>
+      </tr>
+    } @empty {
+      <tr>
+        <td colspan="8">Nenhuma avaliação neste estudo.</td>
+      </tr>
+    }
+  </tbody>
+</table>

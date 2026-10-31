@@ -2,7 +2,8 @@
 name = "rag-evaluation-api"
 version = "0.1.0"
 description = "Backend do estudo de avaliacao cega de pipelines RAG"
-requires-python = ">=3.12"
+# Teto no 3.13: o scikit-network, dependencia do ragas, nao publica wheel para o 3.14.
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "fastapi[standard]>=0.141.0",
     "sqlmodel>=0.0.22",
@@ -14,6 +15,10 @@ dependencies = [
     "openai>=1.59",
     "pypdf>=5.1",
     "defusedxml>=0.7",
+    "ragas==0.4.3",
+    "langchain-community<0.4",
+    "tiktoken>=0.14.0",
+    "truststore>=0.10.5",
 ]
 
 [dependency-groups]

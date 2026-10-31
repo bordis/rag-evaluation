@@ -1,4 +1,23 @@
 services:
+  postgres:
+    container_name: rag-postgres
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: ${DB_NAME:-rag-evaluation}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:5432:5432"
+      # Sem o IPv6, "localhost" espera o ::1 expirar (30s) antes de cair no 127.0.0.1.
+      - "[::1]:5432:5432"
+
   etcd:
     container_name: rag-etcd
     image: quay.io/coreos/etcd:v3.5.18
@@ -64,5 +83,33 @@ services:
     image: quay.io/docling-project/docling-serve:v1.19.0
     environment:
       DOCLING_SERVE_ENABLE_UI: "1"
+      # Sem isso o servidor recusa picture_description_api, usado para descrever as imagens.
+      DOCLING_SERVE_ENABLE_REMOTE_SERVICES: "true"
+      # Com antivirus que inspeciona HTTPS, sem a raiz dele as descricoes de imagem falham.
+      REQUESTS_CA_BUNDLE: ${DOCLING_CA_BUNDLE:-}
+      SSL_CERT_FILE: ${DOCLING_CA_BUNDLE:-}
+    volumes:
+      - ./volumes/certs:/certs:ro
     ports:
       - "5001:5001"
+
+  reranker:
+    container_name: rag-reranker
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4
+    # Revisao fixa: o modelo faz parte do tratamento e nao pode mudar no meio da coleta. Lote
+    # pequeno porque, com o padrao (16384 tokens), o aquecimento esgota a memoria do Docker. O
+    # limite impede que um pico aqui derrube o Milvus junto.
+    command: >
+      --model-id BAAI/bge-reranker-v2-m3
+      --revision 953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e
+      --max-batch-tokens 2048
+      --max-client-batch-size 64
+      --tokenization-workers 2
+    mem_limit: 4g
+    volumes:
+      - ./volumes/tei:/data
+    ports:
+      - "127.0.0.1:8081:80"
+
+volumes:
+  postgres-data:

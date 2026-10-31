@@ -24,8 +24,8 @@ def test_metrica_de_llm_carrega_tokens_e_modelo():
     resposta = RespostaLLM(
         texto="ok", tokens_prompt=10, tokens_completion=4, tokens_total=14, modelo="m-1"
     )
-    metrica = metrica_de_llm(EtapaPipeline.QUERY_REWRITING, 250, resposta, {"original": "pergunta"})
-    assert metrica.etapa is EtapaPipeline.QUERY_REWRITING
+    metrica = metrica_de_llm(EtapaPipeline.HYDE, 250, resposta, {"original": "pergunta"})
+    assert metrica.etapa is EtapaPipeline.HYDE
     assert metrica.duracao_ms == 250
     assert metrica.tokens_total == 14
     assert metrica.modelo == "m-1"

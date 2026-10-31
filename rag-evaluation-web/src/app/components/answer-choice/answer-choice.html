@@ -1,7 +1,9 @@
-<div class="intro">
+<div class="intro surgir">
   <span class="avatar" aria-hidden="true">✳</span>
   <p class="intro__text">
-    @if (decidida()) {
+    @if (round().nenhumaCorreta) {
+      Você indicou que <strong>nenhuma resposta está correta</strong>. Obrigado!
+    } @else if (decidida()) {
       Você escolheu a <strong>Resposta {{ round().escolhaRotulo }}</strong
       >. Obrigado!
     } @else {
@@ -14,7 +16,8 @@
 <ul class="grid" role="list">
   @for (resposta of round().respostas; track resposta.rotuloCego) {
     <li
-      class="answer"
+      class="answer surgir"
+      [style.--ordem]="$index + 1"
       [class.answer--chosen]="round().escolhaRotulo === resposta.rotuloCego"
       [class.answer--dimmed]="decidida() && round().escolhaRotulo !== resposta.rotuloCego"
     >
@@ -25,7 +28,7 @@
         }
       </div>
 
-      <p class="answer__text">{{ resposta.texto }}</p>
+      <div class="answer__text md" [innerHTML]="resposta.texto | markdown"></div>
 
       <button
         type="button"
@@ -38,3 +41,14 @@
     </li>
   }
 </ul>
+
+@if (!decidida()) {
+  <button
+    type="button"
+    class="nenhuma surgir"
+    [style.--ordem]="round().respostas.length + 1"
+    (click)="onEscolher(null)"
+  >
+    Nenhuma das respostas está correta
+  </button>
+}

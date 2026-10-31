@@ -4,11 +4,12 @@ from sqlmodel import SQLModel
 
 from alembic import context
 from app.core.config import get_settings
-from app.models import document, evaluation, pipeline, telemetry  # noqa: F401
+from app.models import document, evaluation, pipeline, study, telemetry  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Sem isto, rodar as migracoes no lifespan desliga os loggers do uvicorn e os erros somem.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 config.set_main_option("sqlalchemy.url", get_settings().sqlalchemy_url)
 target_metadata = SQLModel.metadata

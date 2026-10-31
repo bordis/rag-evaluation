@@ -2,13 +2,13 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 
 import {
   MAX_PERGUNTAS,
-  type PerfilAvaliador,
   type ProgressoDocumento,
   type QuestionRound,
   type RagDocument,
   type RotuloCego,
 } from '../models/evaluation-model';
 import { ApiRag } from './api-rag';
+import { CronometroRodada } from './cronometro-rodada';
 
 /**
  * Chave do `sessionStorage`. É a **única** coisa persistida no navegador: o histórico das
@@ -27,6 +27,7 @@ const CHAVE_SESSAO = 'rag-evaluation.session-id';
 @Injectable({ providedIn: 'root' })
 export class EvaluationStore {
   private readonly api = inject(ApiRag);
+  private readonly cronometro = inject(CronometroRodada);
 
   private readonly _sessionId = signal<string | null>(this.lerSessaoSalva());
   private readonly _documents = signal<RagDocument[]>([]);
@@ -76,32 +77,59 @@ export class EvaluationStore {
   }
 
   hasPendingRound(slug: string): boolean {
-    return this.rounds(slug).some((round) => !round.escolhaRotulo);
+    return this.rounds(slug).some((round) => !round.escolhidoEm);
   }
 
   /**
-   * Garante uma sessão no servidor. Chamada pela tela de perfil com os dados informados e,
-   * como rede de segurança, por quem entrar direto numa URL profunda — nesse caso a sessão
-   * nasce anônima, sem perfil.
+   * Cria a sessão a partir do aceite do termo, na tela de boas-vindas.
+   * TODO: quando houver login, ligar a sessão ao avaliador; hoje, fechar a aba cria outro.
    */
-  async garantirSessao(perfil: PerfilAvaliador = {}): Promise<string | null> {
+  async iniciarSessao(termoVersao: string): Promise<string | null> {
     const atual = this._sessionId();
     if (atual) {
       return atual;
     }
     return this.executar(async () => {
-      const id = await this.api.criarSessao(perfil);
+      const id = await this.api.criarSessao(termoVersao);
       this._sessionId.set(id);
       sessionStorage.setItem(CHAVE_SESSAO, id);
       return id;
     });
   }
 
+  /** Uma sessão de um estudo já encerrado não serve mais: o novo estudo começa zerado. */
+  async sessaoValida(): Promise<boolean> {
+    const sessionId = this._sessionId();
+    if (!sessionId) {
+      return false;
+    }
+    try {
+      const progresso = await this.api.obterProgresso(sessionId);
+      if (progresso.estudoAberto) {
+        return true;
+      }
+    } catch (erro) {
+      // Só o servidor dizer que a sessão não existe a descarta; rede fora do ar não.
+      if ((erro as { status?: number }).status !== 404) {
+        return true;
+      }
+    }
+    this.descartarSessao();
+    return false;
+  }
+
+  private descartarSessao(): void {
+    this._sessionId.set(null);
+    this._roundsByDoc.set({});
+    this._progressoBySlug.set({});
+    sessionStorage.removeItem(CHAVE_SESSAO);
+    this.cronometro.limpar();
+  }
+
   /** Carrega documentos e progresso. Usada na entrada da tela de seleção. */
   async carregarCatalogo(): Promise<void> {
     this._carregando.set(true);
     try {
-      await this.garantirSessao();
       await this.executar(async () => {
         this._documents.set(await this.api.listarDocumentos());
         await this.atualizarProgresso();
@@ -115,7 +143,6 @@ export class EvaluationStore {
   async abrirDocumento(slug: string): Promise<void> {
     this._carregando.set(true);
     try {
-      await this.garantirSessao();
       await this.executar(async () => {
         if (this._documents().length === 0) {
           this._documents.set(await this.api.listarDocumentos());
@@ -127,6 +154,9 @@ export class EvaluationStore {
         const rodadas = await this.api.listarRodadas(sessionId, slug);
         this._roundsByDoc.update((mapa) => ({ ...mapa, [slug]: rodadas }));
         await this.atualizarProgresso();
+        if (!this.isComplete(slug)) {
+          this.cronometro.retomar(slug);
+        }
       });
     } finally {
       this._carregando.set(false);
@@ -142,15 +172,17 @@ export class EvaluationStore {
     if (!pergunta || this.isComplete(slug) || this.hasPendingRound(slug) || this._gerando()) {
       return undefined;
     }
-    const sessionId = await this.garantirSessao();
+    const sessionId = this._sessionId();
     if (!sessionId) {
       return undefined;
     }
 
     this._gerando.set(true);
+    const inicioGeracao = Date.now();
     try {
       const rodada = await this.executar(async () => {
         const gerada = await this.api.perguntar(sessionId, slug, pergunta);
+        this.cronometro.registrarGeracao(slug, Date.now() - inicioGeracao);
         this._roundsByDoc.update((mapa) => ({
           ...mapa,
           [slug]: [...(mapa[slug] ?? []), gerada],
@@ -163,15 +195,19 @@ export class EvaluationStore {
     }
   }
 
-  /** Registra a escolha do avaliador e atualiza o progresso com o número vindo do servidor. */
-  async chooseAnswer(slug: string, roundId: string, rotulo: RotuloCego): Promise<void> {
+  /**
+   * Registra a escolha (`null` = nenhuma está correta) com o tempo da rodada. O cronômetro zera
+   * só com a confirmação do servidor, e a próxima rodada começa a contar a partir daqui.
+   */
+  async chooseAnswer(slug: string, roundId: string, rotulo: RotuloCego | null): Promise<void> {
     const rodada = this.rounds(slug).find((item) => item.id === roundId);
-    if (!rodada || rodada.escolhaRotulo) {
+    if (!rodada || rodada.escolhidoEm) {
       return;
     }
 
     await this.executar(async () => {
-      const decidida = await this.api.escolher(roundId, rotulo);
+      const decidida = await this.api.escolher(roundId, rotulo, this.cronometro.ler(slug));
+      this.cronometro.reiniciar(slug);
       this._roundsByDoc.update((mapa) => ({
         ...mapa,
         [slug]: (mapa[slug] ?? []).map((item) => (item.id === roundId ? decidida : item)),

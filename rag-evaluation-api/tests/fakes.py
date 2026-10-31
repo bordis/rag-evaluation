@@ -43,7 +43,10 @@ class PipelineFalso:
                 ),
             ],
             chunks=[
-                Candidato(milvus_id=1, chunk_index=0, texto="trecho um", score_final=0.9),
+                # ID real do Milvus: o auto_id nao cabe em 32 bits.
+                Candidato(
+                    milvus_id=470122313216735446, chunk_index=0, texto="trecho um", score_final=0.9
+                ),
                 Candidato(milvus_id=2, chunk_index=1, texto="trecho dois", score_final=0.5),
             ],
         )

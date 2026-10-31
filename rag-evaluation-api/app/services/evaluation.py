@@ -22,7 +22,7 @@ from app.core.config import get_settings
 from app.core.milvus import construir_cliente
 from app.models.evaluation import PipelineAnswer, QuestionRound
 from app.models.pipeline import Pipeline
-from app.models.telemetry import AnswerStageMetric, RetrievedChunk
+from app.models.telemetry import AnswerStageMetric, EtapaChunk, RetrievedChunk
 from app.rag.pipeline import RespostaDePipeline, executar_pipeline
 
 ROTULOS = ("A", "B", "C", "D")
@@ -61,14 +61,14 @@ def _copia_transiente(pipeline: Pipeline) -> Pipeline:
 
 
 def contar_respondidas(sessao: Session, session_id: uuid.UUID, document_id: uuid.UUID) -> int:
-    """So conta rodada decidida: perguntar e abandonar nao consome a cota do documento."""
+    """So conta rodada decidida, com resposta ou com "nenhuma": perguntar e abandonar nao conta."""
     total = sessao.exec(
         select(func.count())
         .select_from(QuestionRound)
         .where(
             QuestionRound.session_id == session_id,
             QuestionRound.document_id == document_id,
-            QuestionRound.escolha_answer_id.is_not(None),  # type: ignore[union-attr]
+            QuestionRound.escolhido_em.is_not(None),  # type: ignore[union-attr]
         )
     ).one()
     return int(total)
@@ -82,7 +82,7 @@ def rodada_pendente(
         .where(
             QuestionRound.session_id == session_id,
             QuestionRound.document_id == document_id,
-            QuestionRound.escolha_answer_id.is_(None),  # type: ignore[union-attr]
+            QuestionRound.escolhido_em.is_(None),  # type: ignore[union-attr]
         )
         .order_by(QuestionRound.criado_em)  # type: ignore[arg-type]
     ).first()
@@ -151,7 +151,14 @@ def _persistir(
     resultados: Sequence[RespostaDePipeline],
     rotulos: Sequence[str],
 ) -> QuestionRound:
-    rodada = QuestionRound(session_id=session_id, document_id=document_id, pergunta=pergunta)
+    ordem = len(listar_rodadas(sessao, session_id, document_id)) + 1
+    rodada = QuestionRound(
+        session_id=session_id,
+        document_id=document_id,
+        pergunta=pergunta,
+        ordem=ordem,
+        respondido_em=datetime.now(UTC),
+    )
     sessao.add(rodada)
     # Flush explicito entre os niveis: nenhuma das tabelas declara `Relationship`, e sem isso o
     # unit of work nao conhece a dependencia — as respostas iriam para o banco antes da rodada e a
@@ -163,7 +170,10 @@ def _persistir(
             round_id=rodada.id,
             pipeline_id=pipeline.id,  # type: ignore[arg-type]
             rotulo_cego=rotulo,
+            # O front lista em ordem de rotulo; a posicao fica gravada caso o layout mude.
+            posicao_exibida=ROTULOS.index(rotulo) + 1,
             texto=resultado.texto,
+            config_snapshot=dict(pipeline.config or {}),
         )
         sessao.add(resposta)
         sessao.flush()
@@ -183,19 +193,23 @@ def _persistir(
                 )
             )
 
-        for posicao, candidato in enumerate(resultado.chunks, start=1):
-            sessao.add(
-                RetrievedChunk(
-                    answer_id=resposta.id,
-                    milvus_id=candidato.milvus_id,
-                    chunk_index=candidato.chunk_index,
-                    score_denso=candidato.score_denso,
-                    score_esparso=candidato.score_esparso,
-                    score_final=candidato.score_final,
-                    posicao_final=posicao,
-                    texto=candidato.texto,
+        etapas = resultado.etapas or {EtapaChunk.CONTEXTO_FINAL: resultado.chunks}
+        for etapa, candidatos in etapas.items():
+            for posicao, candidato in enumerate(candidatos, start=1):
+                sessao.add(
+                    RetrievedChunk(
+                        answer_id=resposta.id,
+                        milvus_id=candidato.milvus_id,
+                        chunk_index=candidato.chunk_index,
+                        score_denso=candidato.score_denso,
+                        score_esparso=candidato.score_esparso,
+                        score_final=candidato.score_final,
+                        etapa=etapa,
+                        posicao=posicao,
+                        origem=candidato.origem,
+                        texto=candidato.texto,
+                    )
                 )
-            )
 
     sessao.commit()
     sessao.refresh(rodada)
@@ -225,9 +239,22 @@ async def criar_rodada(
     return _persistir(sessao, session_id, document_id, pergunta, pipelines, resultados, rotulos)
 
 
-def registrar_escolha(sessao: Session, rodada: QuestionRound, resposta: PipelineAnswer) -> None:
-    rodada.escolha_answer_id = resposta.id
+def registrar_escolha(
+    sessao: Session,
+    rodada: QuestionRound,
+    resposta: PipelineAnswer | None,
+    *,
+    tempo_total_ms: int | None = None,
+    tempo_geracao_ms: int | None = None,
+    tempo_oculto_ms: int | None = None,
+) -> None:
+    """Sem `resposta`, o avaliador marcou que nenhuma das quatro esta correta."""
+    rodada.escolha_answer_id = resposta.id if resposta else None
+    rodada.nenhuma_correta = resposta is None
     rodada.escolhido_em = datetime.now(UTC)
+    rodada.tempo_total_ms = tempo_total_ms
+    rodada.tempo_geracao_ms = tempo_geracao_ms
+    rodada.tempo_oculto_ms = tempo_oculto_ms
     sessao.add(rodada)
     sessao.commit()
     sessao.refresh(rodada)

@@ -1,8 +1,8 @@
 """Sessao anonima do avaliador e seu progresso.
 
 Nao ha autenticacao: a sessao e so um UUID que o frontend guarda no `sessionStorage`. Ela existe
-para impor o limite de perguntas no servidor e para permitir cruzar preferencia com perfil na
-analise — nunca para identificar a pessoa.
+para impor o limite de perguntas no servidor e ligar as rodadas ao estudo — nunca para identificar
+a pessoa.
 """
 
 import uuid
@@ -15,35 +15,36 @@ from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.models.document import Document
 from app.models.evaluation import EvaluationSession, QuestionRound
+from app.models.study import StatusEstudo, Study
 from app.schemas.evaluation import (
-    PerfilAvaliador,
+    AceiteDoTermo,
     ProgressoDocumento,
     ProgressoSessao,
     SessaoCriada,
 )
+from app.services.studies import estudo_aberto
 
 router = APIRouter(prefix="/api/sessions", tags=["sessoes"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def criar_sessao(sessao: SessionDep, perfil: PerfilAvaliador | None = None) -> SessaoCriada:
-    """O corpo e opcional: quem nao quiser informar o perfil manda `{}` ou nada."""
-    dados = perfil or PerfilAvaliador()
-    avaliador = EvaluationSession(
-        area_atuacao=dados.area_atuacao,
-        familiaridade=dados.familiaridade,
-        tempo_experiencia=dados.tempo_experiencia,
-    )
+def criar_sessao(sessao: SessionDep, aceite: AceiteDoTermo) -> SessaoCriada:
+    """A sessao nasce no estudo aberto: sem estudo aberto, ninguem responde."""
+    estudo = estudo_aberto(sessao)
+    if estudo is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Não há estudo aberto no momento.")
+    avaliador = EvaluationSession(study_id=estudo.id, termo_versao=aceite.termo_versao)
     sessao.add(avaliador)
     sessao.commit()
     sessao.refresh(avaliador)
-    return SessaoCriada(id=avaliador.id, criado_em=avaliador.criado_em)
+    return SessaoCriada(id=avaliador.id, study_id=estudo.id, criado_em=avaliador.criado_em)
 
 
 @router.get("/{session_id}/progress")
 def obter_progresso(sessao: SessionDep, session_id: uuid.UUID) -> ProgressoSessao:
     """Quantas perguntas ja foram respondidas por documento. Reidrata a UI apos um F5."""
-    if sessao.get(EvaluationSession, session_id) is None:
+    avaliador = sessao.get(EvaluationSession, session_id)
+    if avaliador is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada.")
 
     max_perguntas = get_settings().max_perguntas
@@ -52,7 +53,7 @@ def obter_progresso(sessao: SessionDep, session_id: uuid.UUID) -> ProgressoSessa
         .join(QuestionRound, QuestionRound.document_id == Document.id)  # type: ignore[arg-type]
         .where(
             QuestionRound.session_id == session_id,
-            QuestionRound.escolha_answer_id.is_not(None),  # type: ignore[union-attr]
+            QuestionRound.escolhido_em.is_not(None),  # type: ignore[union-attr]
         )
         .group_by(Document.id, Document.slug)  # type: ignore[arg-type]
     ).all()
@@ -69,6 +70,7 @@ def obter_progresso(sessao: SessionDep, session_id: uuid.UUID) -> ProgressoSessa
     return ProgressoSessao(
         session_id=session_id,
         max_perguntas=max_perguntas,
+        estudo_aberto=sessao.get(Study, avaliador.study_id).status is StatusEstudo.ABERTO,
         total_concluidos=sum(1 for item in documentos if item.concluido),
         documentos=documentos,
     )

@@ -5,6 +5,7 @@ from sqlmodel import Session
 
 from app.models.document import Document, StatusDocumento
 from app.models.evaluation import EvaluationSession, QuestionRound
+from app.models.study import StatusEstudo, Study
 from app.seed import semear_pipelines
 from app.services import evaluation as servico
 from tests.fakes import PipelineFalso, dependencias_falsas
@@ -49,8 +50,23 @@ def documento_fixture(sessao: Session) -> Document:
     return documento
 
 
+@pytest.fixture(name="estudo", autouse=True)
+def estudo_fixture(sessao: Session) -> Study:
+    estudo = Study(nome="Coleta")
+    sessao.add(estudo)
+    sessao.commit()
+    sessao.refresh(estudo)
+    return estudo
+
+
+def _encerrar(sessao: Session, estudo: Study) -> None:
+    estudo.status = StatusEstudo.ENCERRADO
+    sessao.add(estudo)
+    sessao.commit()
+
+
 def _criar_sessao(cliente) -> str:
-    resposta = cliente.post("/api/sessions", json={})
+    resposta = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"})
     assert resposta.status_code == 201
     return resposta.json()["id"]
 
@@ -73,30 +89,93 @@ def _chaves(dado, encontradas: set[str] | None = None) -> set[str]:
     return encontradas
 
 
-def test_sessao_sem_corpo_e_criada_anonima(cliente, sessao):
-    resposta = cliente.post("/api/sessions")
+def test_sessao_exige_o_aceite_do_termo(cliente):
+    assert cliente.post("/api/sessions").status_code == 422
+    assert (
+        cliente.post("/api/sessions", json={"aceite": False, "termo_versao": "v1"}).status_code
+        == 422
+    )
+
+
+def test_sessao_grava_o_aceite_e_nasce_no_estudo_aberto(cliente, sessao, estudo):
+    resposta = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"})
 
     assert resposta.status_code == 201
     avaliador = sessao.get(EvaluationSession, uuid.UUID(resposta.json()["id"]))
-    assert avaliador is not None
-    assert avaliador.area_atuacao is None
+    assert avaliador.study_id == estudo.id
+    assert avaliador.termo_versao == "v1"
+    assert avaliador.aceito_em is not None
 
 
-def test_sessao_grava_o_perfil_opcional(cliente, sessao):
-    resposta = cliente.post(
-        "/api/sessions",
+def test_sem_estudo_aberto_ninguem_comeca(cliente, sessao, estudo):
+    _encerrar(sessao, estudo)
+
+    resposta = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"})
+
+    assert resposta.status_code == 409
+
+
+def test_estudo_encerrado_congela_perguntas_e_escolhas(cliente, sessao, documento, estudo):
+    session_id = _criar_sessao(cliente)
+    rodada = _perguntar(cliente, session_id, documento.slug).json()
+
+    _encerrar(sessao, estudo)
+
+    assert _perguntar(cliente, session_id, documento.slug, "Outra?").status_code == 409
+    assert (
+        cliente.post(f"/api/rounds/{rodada['id']}/choice", json={"rotulo": "A"}).status_code == 409
+    )
+    assert cliente.get(f"/api/sessions/{session_id}/progress").json()["estudo_aberto"] is False
+
+
+def test_nenhuma_correta_conta_como_decisao_sem_vencedora(cliente, sessao, documento):
+    session_id = _criar_sessao(cliente)
+    rodada = _perguntar(cliente, session_id, documento.slug).json()
+
+    resposta = cliente.post(f"/api/rounds/{rodada['id']}/choice", json={"rotulo": None})
+
+    assert resposta.status_code == 200
+    assert resposta.json()["nenhuma_correta"] is True
+    assert resposta.json()["escolha_rotulo"] is None
+    persistida = sessao.get(QuestionRound, uuid.UUID(rodada["id"]))
+    assert persistida.escolha_answer_id is None
+    assert (
+        cliente.get(f"/api/sessions/{session_id}/progress").json()["documentos"][0]["respondidas"]
+        == 1
+    )
+    assert _perguntar(cliente, session_id, documento.slug, "Segunda?").status_code == 201
+
+
+def test_escolha_grava_os_tempos_medidos_no_navegador(cliente, sessao, documento):
+    session_id = _criar_sessao(cliente)
+    rodada = _perguntar(cliente, session_id, documento.slug).json()
+
+    cliente.post(
+        f"/api/rounds/{rodada['id']}/choice",
         json={
-            "area_atuacao": "Direito digital",
-            "familiaridade": "alta",
-            "tempo_experiencia": "5-10-anos",
+            "rotulo": "A",
+            "tempo_total_ms": 90000,
+            "tempo_geracao_ms": 12000,
+            "tempo_oculto_ms": 3000,
         },
     )
 
-    assert resposta.status_code == 201
-    avaliador = sessao.get(EvaluationSession, uuid.UUID(resposta.json()["id"]))
-    assert avaliador is not None
-    assert avaliador.familiaridade == "alta"
-    assert avaliador.tempo_experiencia == "5-10-anos"
+    persistida = sessao.get(QuestionRound, uuid.UUID(rodada["id"]))
+    assert persistida.tempo_total_ms == 90000
+    assert persistida.tempo_geracao_ms == 12000
+    assert persistida.tempo_oculto_ms == 3000
+
+
+def test_ordem_da_rodada_e_a_posicao_exibida_ficam_gravadas(cliente, sessao, documento):
+    session_id = _criar_sessao(cliente)
+    primeira = _perguntar(cliente, session_id, documento.slug, "Primeira?").json()
+    cliente.post(f"/api/rounds/{primeira['id']}/choice", json={"rotulo": "A"})
+    segunda = _perguntar(cliente, session_id, documento.slug, "Segunda?").json()
+
+    assert primeira["ordem"] == 1
+    assert segunda["ordem"] == 2
+    respostas = servico.respostas_da_rodada(sessao, uuid.UUID(segunda["id"]))
+    assert [item.posicao_exibida for item in respostas] == [1, 2, 3, 4]
 
 
 def test_pergunta_devolve_quatro_respostas_com_rotulos_de_a_a_d(cliente, documento):

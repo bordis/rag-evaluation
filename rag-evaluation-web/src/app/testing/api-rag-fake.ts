@@ -1,9 +1,10 @@
 import type {
-  PerfilAvaliador,
+  EstudoAtual,
   ProgressoDocumento,
   QuestionRound,
   RagDocument,
   RotuloCego,
+  TemposDaRodada,
 } from '../models/evaluation-model';
 import type { ProgressoSessao } from '../services/api-rag';
 
@@ -16,7 +17,11 @@ const ROTULOS: RotuloCego[] = ['A', 'B', 'C', 'D'];
  * Vive em `src/` e não num `.spec.ts` porque é compartilhado por mais de um arquivo de teste.
  */
 export class ApiRagFake {
-  perfilRecebido: PerfilAvaliador | null = null;
+  termoRecebido: string | null = null;
+  estudo: EstudoAtual | null = { id: 'estudo-1', nome: 'Coleta' };
+  estudoAberto = true;
+  temposRecebidos: TemposDaRodada | undefined;
+  ultimoRotulo: RotuloCego | null | undefined;
   falha: Error | null = null;
   maxPerguntas = 10;
 
@@ -42,9 +47,14 @@ export class ApiRagFake {
   private sequencia = 0;
   private readonly rodadasPorSlug: Record<string, QuestionRound[]> = {};
 
-  async criarSessao(perfil: PerfilAvaliador): Promise<string> {
+  async obterEstudoAtual(): Promise<EstudoAtual | null> {
     this.checar();
-    this.perfilRecebido = perfil;
+    return this.estudo;
+  }
+
+  async criarSessao(termoVersao: string): Promise<string> {
+    this.checar();
+    this.termoRecebido = termoVersao;
     return 'sessao-de-teste';
   }
 
@@ -57,11 +67,11 @@ export class ApiRagFake {
     this.checar();
     const documentos: ProgressoDocumento[] = Object.entries(this.rodadasPorSlug).map(
       ([slug, rodadas]) => {
-        const respondidas = rodadas.filter((rodada) => rodada.escolhaRotulo).length;
+        const respondidas = rodadas.filter((rodada) => rodada.escolhidoEm).length;
         return { slug, respondidas, concluido: respondidas >= this.maxPerguntas };
       },
     );
-    return { maxPerguntas: this.maxPerguntas, documentos };
+    return { maxPerguntas: this.maxPerguntas, estudoAberto: this.estudoAberto, documentos };
   }
 
   async listarRodadas(_sessionId: string, slug: string): Promise<QuestionRound[]> {
@@ -74,6 +84,8 @@ export class ApiRagFake {
     this.sequencia += 1;
     const rodada: QuestionRound = {
       id: `rodada-${this.sequencia}`,
+      ordem: this.sequencia,
+      nenhumaCorreta: false,
       pergunta,
       respostas: ROTULOS.map((rotulo) => ({
         id: `resposta-${this.sequencia}-${rotulo}`,
@@ -85,8 +97,14 @@ export class ApiRagFake {
     return rodada;
   }
 
-  async escolher(roundId: string, rotulo: RotuloCego): Promise<QuestionRound> {
+  async escolher(
+    roundId: string,
+    rotulo: RotuloCego | null,
+    tempos?: TemposDaRodada,
+  ): Promise<QuestionRound> {
     this.checar();
+    this.ultimoRotulo = rotulo;
+    this.temposRecebidos = tempos;
     for (const [slug, rodadas] of Object.entries(this.rodadasPorSlug)) {
       const alvo = rodadas.find((rodada) => rodada.id === roundId);
       if (!alvo) {
@@ -94,7 +112,8 @@ export class ApiRagFake {
       }
       const decidida: QuestionRound = {
         ...alvo,
-        escolhaRotulo: rotulo,
+        escolhaRotulo: rotulo ?? undefined,
+        nenhumaCorreta: rotulo === null,
         escolhidoEm: new Date().toISOString(),
       };
       this.rodadasPorSlug[slug] = rodadas.map((rodada) =>

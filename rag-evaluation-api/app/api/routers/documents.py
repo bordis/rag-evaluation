@@ -1,4 +1,4 @@
-"""Gestao do acervo. Uso exclusivo do pesquisador, pelo Swagger — nao ha UI de administracao."""
+"""Gestao do acervo pelo administrador. A leitura com `status=pronto` tambem serve o avaliador."""
 
 import hashlib
 import pathlib
@@ -12,9 +12,10 @@ from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.milvus import construir_cliente
 from app.models.document import Document, DocumentIngestion, StatusDocumento
+from app.models.evaluation import QuestionRound
 from app.models.pipeline import Pipeline
 from app.rag.indexing import remover_documento
-from app.rag.parsing.base import EXTENSOES_SUPORTADAS, MIMES_SUPORTADOS
+from app.rag.parsing.base import MIME_DO_ACERVO
 from app.schemas.document import (
     DocumentoAceito,
     DocumentoDetalhe,
@@ -29,17 +30,13 @@ SlugForm = Annotated[str, Form(min_length=2, max_length=64, pattern=r"^[a-z0-9][
 
 
 def _resolver_mime(arquivo: UploadFile) -> str:
-    """O Swagger manda `application/octet-stream` para .md; a extensao desempata."""
-    if arquivo.content_type in MIMES_SUPORTADOS:
-        return arquivo.content_type
+    """So PDF entra no acervo. Alguns clientes mandam `octet-stream`; a extensao desempata."""
     extensao = pathlib.PurePath(arquivo.filename or "").suffix.lower()
-    mime = EXTENSOES_SUPORTADAS.get(extensao)
-    if mime is None:
-        raise HTTPException(
-            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Tipo não suportado. Aceitos: {', '.join(sorted(MIMES_SUPORTADOS))}.",
-        )
-    return mime
+    if arquivo.content_type == MIME_DO_ACERVO or extensao == ".pdf":
+        return MIME_DO_ACERVO
+    raise HTTPException(
+        status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="O acervo aceita apenas arquivos PDF."
+    )
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
@@ -168,6 +165,12 @@ def excluir_documento(sessao: SessionDep, documento_id: uuid.UUID) -> None:
     documento = sessao.get(Document, documento_id)
     if documento is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Documento não encontrado.")
+    # O cascade apagaria rodadas coletadas: dado de estudo nao some por um clique no acervo.
+    if sessao.exec(select(QuestionRound).where(QuestionRound.document_id == documento_id)).first():
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Este documento já tem rodadas registradas e não pode ser excluído.",
+        )
 
     # Milvus primeiro: se ele falhar, a linha continua no Postgres e a exclusao pode ser
     # repetida. Na ordem inversa, os vetores ficariam orfaos sem ninguem para apaga-los.

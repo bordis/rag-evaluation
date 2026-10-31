@@ -1,0 +1,140 @@
+:host {
+  --no: 32px;
+  display: block;
+}
+
+.etapas__resumo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.etapas__titulo {
+  font-size: 24px;
+  line-height: 1.2;
+  color: var(--color-heading);
+}
+
+.etapas__contagem {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.trilha {
+  position: relative;
+}
+
+.trilha__fundo {
+  position: absolute;
+  top: calc(var(--no) / 2 - 2px);
+  right: calc(var(--no) / 2);
+  left: calc(var(--no) / 2);
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-cream-strong);
+}
+
+/* A linha chega primeiro; o nó responde em seguida, como uma etapa sendo carimbada. */
+.trilha__avanco {
+  display: block;
+  height: 100%;
+  background-color: var(--color-primary);
+  transform-origin: left;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nos {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--no);
+  height: var(--no);
+  border: 2px solid var(--color-surface-cream-strong);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-canvas);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition:
+    background-color 0.3s ease 0.25s,
+    border-color 0.3s ease 0.25s,
+    color 0.3s ease 0.25s;
+}
+
+.no--feita {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  animation: carimbar 0.4s ease 0.25s;
+}
+
+.no--atual {
+  position: relative;
+  border-color: var(--color-primary);
+  color: var(--color-primary-active);
+  font-weight: 600;
+}
+
+.no--atual::after {
+  position: absolute;
+  inset: -2px;
+  border: 2px solid var(--color-primary);
+  border-radius: inherit;
+  content: '';
+  animation: irradiar 2.2s ease-out infinite;
+}
+
+@keyframes carimbar {
+  40% {
+    transform: scale(1.18);
+  }
+}
+
+@keyframes irradiar {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trilha__avanco,
+  .no {
+    transition: none;
+  }
+
+  .no--feita,
+  .no--atual::after {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  :host {
+    --no: 26px;
+  }
+
+  .no {
+    font-size: 11px;
+  }
+
+  .etapas__titulo {
+    font-size: 20px;
+  }
+}

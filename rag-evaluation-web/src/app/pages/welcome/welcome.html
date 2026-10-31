@@ -21,9 +21,32 @@
     }
   </ol>
 
-  <a class="cta" routerLink="/perfil">Começar avaliação</a>
+  @if (carregando()) {
+    <p class="hero__note" role="status">Verificando se há um estudo aberto…</p>
+  } @else if (erro(); as mensagem) {
+    <p class="aviso" role="alert">{{ mensagem }}</p>
+  } @else if (!estudo()) {
+    <p class="aviso" role="status">
+      Não há estudo aberto no momento. Volte quando o pesquisador iniciar a coleta.
+    </p>
+  } @else {
+    <section class="termo" aria-labelledby="termo-titulo">
+      <h2 id="termo-titulo" class="termo__titulo">Termo de participação</h2>
+      @for (paragrafo of termo; track $index) {
+        <p class="termo__texto">{{ paragrafo }}</p>
+      }
+      <label class="termo__aceite">
+        <input type="checkbox" [checked]="aceite()" (change)="onAceite($event)" />
+        Li as informações acima e concordo em participar.
+      </label>
+    </section>
 
-  <p class="hero__note">
-    Leva poucos minutos por documento. Você pode alternar entre documentos quando quiser.
-  </p>
+    <button type="button" class="cta" [disabled]="!aceite() || enviando()" (click)="comecar()">
+      Começar avaliação
+    </button>
+
+    <p class="hero__note">
+      Leva poucos minutos por documento. Você pode alternar entre documentos quando quiser.
+    </p>
+  }
 </section>

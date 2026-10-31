@@ -8,22 +8,21 @@ de reintroduzi-la.
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.models.evaluation import Familiaridade, TempoExperiencia
 
+class AceiteDoTermo(BaseModel):
+    """Corpo do `POST /sessions`: sem aceite do termo de participacao, nao ha sessao."""
 
-class PerfilAvaliador(BaseModel):
-    """Corpo do `POST /sessions`. Todo o perfil e opcional — a sessao e anonima."""
-
-    area_atuacao: str | None = Field(default=None, max_length=120)
-    familiaridade: Familiaridade | None = None
-    tempo_experiencia: TempoExperiencia | None = None
+    aceite: Literal[True]
+    termo_versao: str = Field(min_length=1, max_length=32)
 
 
 class SessaoCriada(BaseModel):
     id: uuid.UUID
+    study_id: uuid.UUID
     criado_em: datetime | None
 
 
@@ -39,13 +38,20 @@ class RodadaDetalhe(BaseModel):
     id: uuid.UUID
     pergunta: str
     respostas: list[RespostaCega]
+    ordem: int
     escolha_rotulo: str | None
+    nenhuma_correta: bool
     criado_em: datetime | None
     escolhido_em: datetime | None
 
 
 class EscolhaEntrada(BaseModel):
-    rotulo: str = Field(min_length=1, max_length=1, pattern="^[A-D]$")
+    """`rotulo` nulo significa "nenhuma esta correta". Os tempos sao medidos no navegador."""
+
+    rotulo: str | None = Field(default=None, min_length=1, max_length=1, pattern="^[A-D]$")
+    tempo_total_ms: int | None = Field(default=None, ge=0)
+    tempo_geracao_ms: int | None = Field(default=None, ge=0)
+    tempo_oculto_ms: int | None = Field(default=None, ge=0)
 
 
 class ProgressoDocumento(BaseModel):
@@ -58,5 +64,7 @@ class ProgressoDocumento(BaseModel):
 class ProgressoSessao(BaseModel):
     session_id: uuid.UUID
     max_perguntas: int
+    # Falso quando o estudo da sessao encerrou: o front descarta a sessao e volta ao inicio.
+    estudo_aberto: bool
     total_concluidos: int
     documentos: list[ProgressoDocumento]

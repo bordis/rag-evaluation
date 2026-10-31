@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from app.models.document import Document, StatusDocumento
 from app.models.evaluation import EvaluationSession, PipelineAnswer, QuestionRound
 from app.models.pipeline import ParserType, Pipeline
+from app.models.study import StatusEstudo, Study
 
 
 def _pipeline(sessao: Session, codigo: str) -> Pipeline:
@@ -57,14 +58,30 @@ def test_codigo_de_pipeline_e_unico(sessao: Session):
         _pipeline(sessao, "pipeline-1")
 
 
-def test_rodada_nasce_sem_escolha(sessao: Session):
-    documento = _documento(sessao)
-    avaliador = EvaluationSession()
+def _avaliador(sessao: Session) -> EvaluationSession:
+    estudo = Study(nome=f"estudo-{uuid.uuid4()}", status=StatusEstudo.ENCERRADO)
+    sessao.add(estudo)
+    sessao.commit()
+    avaliador = EvaluationSession(study_id=estudo.id, termo_versao="v1")
     sessao.add(avaliador)
     sessao.commit()
+    return avaliador
+
+
+def test_so_um_estudo_aberto_por_vez(sessao: Session):
+    sessao.add(Study(nome="um"))
+    sessao.commit()
+    sessao.add(Study(nome="dois"))
+    with pytest.raises(IntegrityError):
+        sessao.commit()
+
+
+def test_rodada_nasce_sem_escolha(sessao: Session):
+    documento = _documento(sessao)
+    avaliador = _avaliador(sessao)
 
     rodada = QuestionRound(
-        session_id=avaliador.id, document_id=documento.id, pergunta="O que e dado pessoal?"
+        session_id=avaliador.id, document_id=documento.id, pergunta="O que e dado pessoal?", ordem=1
     )
     sessao.add(rodada)
     sessao.commit()
@@ -75,37 +92,53 @@ def test_rodada_nasce_sem_escolha(sessao: Session):
 
 def test_rotulo_cego_nao_se_repete_na_mesma_rodada(sessao: Session):
     documento = _documento(sessao)
-    avaliador = EvaluationSession()
-    sessao.add(avaliador)
-    sessao.commit()
-    rodada = QuestionRound(session_id=avaliador.id, document_id=documento.id, pergunta="pergunta")
+    avaliador = _avaliador(sessao)
+    rodada = QuestionRound(
+        session_id=avaliador.id, document_id=documento.id, pergunta="pergunta", ordem=1
+    )
     sessao.add(rodada)
     sessao.commit()
 
     p1 = _pipeline(sessao, "pipeline-1")
     p2 = _pipeline(sessao, "pipeline-2")
-    sessao.add(PipelineAnswer(round_id=rodada.id, pipeline_id=p1.id, rotulo_cego="A", texto="x"))
+    sessao.add(
+        PipelineAnswer(
+            round_id=rodada.id, pipeline_id=p1.id, rotulo_cego="A", posicao_exibida=1, texto="x"
+        )
+    )
     sessao.commit()
 
-    sessao.add(PipelineAnswer(round_id=rodada.id, pipeline_id=p2.id, rotulo_cego="A", texto="y"))
+    sessao.add(
+        PipelineAnswer(
+            round_id=rodada.id, pipeline_id=p2.id, rotulo_cego="A", posicao_exibida=1, texto="y"
+        )
+    )
     with pytest.raises(IntegrityError):
         sessao.commit()
 
 
 def test_pipeline_nao_responde_duas_vezes_na_mesma_rodada(sessao: Session):
     documento = _documento(sessao)
-    avaliador = EvaluationSession()
-    sessao.add(avaliador)
-    sessao.commit()
-    rodada = QuestionRound(session_id=avaliador.id, document_id=documento.id, pergunta="pergunta")
+    avaliador = _avaliador(sessao)
+    rodada = QuestionRound(
+        session_id=avaliador.id, document_id=documento.id, pergunta="pergunta", ordem=1
+    )
     sessao.add(rodada)
     sessao.commit()
 
     p1 = _pipeline(sessao, "pipeline-1")
-    sessao.add(PipelineAnswer(round_id=rodada.id, pipeline_id=p1.id, rotulo_cego="A", texto="x"))
+    sessao.add(
+        PipelineAnswer(
+            round_id=rodada.id, pipeline_id=p1.id, rotulo_cego="A", posicao_exibida=1, texto="x"
+        )
+    )
     sessao.commit()
 
-    sessao.add(PipelineAnswer(round_id=rodada.id, pipeline_id=p1.id, rotulo_cego="B", texto="y"))
+    sessao.add(
+        PipelineAnswer(
+            round_id=rodada.id, pipeline_id=p1.id, rotulo_cego="B", posicao_exibida=1, texto="y"
+        )
+    )
     with pytest.raises(IntegrityError):
         sessao.commit()
 

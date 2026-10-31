@@ -24,7 +24,7 @@ if not _env_tem_chave_real():
     os.environ.setdefault("CHAT_API_KEY", "sk-teste")
 
 # Importar os modulos de modelo registra as tabelas no metadata do SQLModel.
-from app.models import document, evaluation, pipeline, telemetry  # noqa: E402,F401
+from app.models import document, evaluation, pipeline, study, telemetry  # noqa: E402,F401
 
 TEST_DB_URL = os.environ.get(
     "TEST_DB_URL", "postgresql+psycopg://postgres:admin@localhost:5432/rag-evaluation-test"

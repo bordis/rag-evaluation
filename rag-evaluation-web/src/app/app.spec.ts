@@ -23,4 +23,18 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.brand__text')?.textContent).toContain('Avaliação RAG');
   });
+
+  it('should link evaluator and admin areas in the top menu', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const links = [...compiled.querySelectorAll('.menu a')].map((el) => el.getAttribute('href'));
+    expect(links).toEqual([
+      '/',
+      '/documentos',
+      '/admin/estudos',
+      '/admin/documentos',
+      '/admin/pipelines',
+    ]);
+  });
 });
