@@ -4,31 +4,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-Angular CLI (v21.2.8) application named `rag-evaluation-web`. It is the front-end for a Master's-thesis study that
-has human evaluators **blindly** pick the best answer among three RAG-pipeline configurations. All content is
-currently **mocked** — a navigable prototype to iterate on the flow and visuals before wiring a real backend.
+Angular CLI (v21.2.8) application named `rag-evaluation-web`. It is the front-end for a study that
+has human evaluators **blindly** pick the best answer among **four** RAG-pipeline configurations. It is **wired to
+the real backend** in `rag-evaluation-api/` — the old `MockRag` is gone. Setup and document-upload instructions
+live in the repo-root `README.md`.
 
-**Flow:** welcome/instructions → pick one document (the one the evaluator knows best) → ChatGPT-style Q&A →
-for each question, three anonymous answers (A/B/C) → choose the best. Up to **10 answered questions per
-document**; completion is **per document**; evaluators can switch documents freely.
+**Flow:** welcome + consent (creates the session, only while a study is open) → pick one document (the one the
+evaluator knows best) → ChatGPT-style Q&A → for each question, four anonymous answers (A/B/C/D) → choose the best or
+"none is correct". Up to **10 answered questions per document, per study**; evaluators can switch documents freely.
+Researcher screens live under `/admin` (studies, documents, pipelines CRUD, round browser, results).
 
 **Key design decisions (not obvious from code):**
-- **Blind evaluation:** answers are shuffled into labels A/B/C; the true pipeline (`pipeline-a/b/c`) is stored
-  only internally on each round (never shown to the evaluator).
-- **In-memory state only** (by request): `EvaluationStore` uses signals with no persistence, so a page reload
-  resets progress. Switch to `localStorage` if a "resume after reload" flow is ever needed.
-- No authentication in this phase. UI copy is **Portuguese (BR)**.
+- **The blind is enforced server-side:** the API's evaluation schemas have no `pipeline` field, so the identity
+  never reaches the browser. There is deliberately **no `PipelineId` type here** — don't reintroduce one.
+- **Only the `sessionId` is persisted** (`sessionStorage`). Round history always comes from
+  `GET /sessions/{id}/documents/{slug}/rounds`, so a reload resumes instead of orphaning answers in the database.
+- **`docId` in the route is the document's `slug`**, not its UUID. Admin routes use the UUID.
+- **The server owns the rules** (question limit, pending round, document readiness). The store's checks only
+  avoid a pointless round trip; a 409 from the API is the real answer.
+- **Only study-open sessions work.** A closed study freezes its data; `sessaoValida()` discards a stored session
+  from a closed study, and a route guard sends the evaluator back to consent.
+- **Round timing is measured in the browser** (`services/cronometro-rodada.ts`) and survives F5. Generation wait and
+  hidden-tab time are separate fields, not subtracted.
+- **Each question is a step, one per screen, with no way back** (`components/progresso-etapas/` only shows progress).
+  This was the researcher's decision after trying read-only review; the server doesn't allow a second choice either.
+- **Answers are Markdown** (`pipes/markdown-pipe.ts`, always through `[innerHTML]`, whose sanitizer is the XSS filter).
+- No authentication in this phase, including `/admin`, which reveals pipelines. The top menu links to it on every
+  screen on purpose for now; hide those links from evaluators before collection. TODO: login. UI copy is **Portuguese (BR)**.
 
 **Architecture (`src/app/`):**
-- `models/evaluation-model.ts` — domain types (`RagDocument`, `QuestionRound`, `PipelineAnswer`, …) and
-  `MAX_PERGUNTAS = 10`.
-- `services/mock-rag.ts` — mock document list + generates and shuffles the 3 candidate answers per question.
-- `services/evaluation-store.ts` — `providedIn: 'root'` signal store (immutable updates, no RxJS): `askQuestion`,
-  `chooseAnswer`, plus `answeredCount`/`isComplete`/`hasPendingRound`/`totalConcluidos`.
-- `pages/` — `welcome/`, `document-selection/`, `evaluation/` (lazy-loaded, one route each).
-- `components/` — `progress-badge/`, `document-card/`, `chat-message/`, `answer-choice/` (reusable, `OnPush`).
+- `models/evaluation-model.ts` — domain types (`RagDocument`, `QuestionRound`, `PipelineAnswer`, `PerfilAvaliador`,
+  …), `RotuloCego = 'A'|'B'|'C'|'D'` and `MAX_PERGUNTAS = 10` (fallback; the real limit comes from `/progress`).
+- `services/api-rag.ts` — the only place that talks HTTP. Converts snake_case → domain and `HttpErrorResponse` →
+  a Portuguese message (`ApiError`).
+- `services/evaluation-store.ts` — `providedIn: 'root'` signal store: cache + orchestration (`iniciarSessao`,
+  `sessaoValida`, `carregarCatalogo`, `abrirDocumento`, `askQuestion`, `chooseAnswer`) plus `carregando`/`gerando`/`erro`.
+  It never generates content and never throws: failures land in `erro()`.
+- `services/api-admin.ts` — researcher API. Its types reveal the pipeline: never use them in the evaluator flow.
+- `models/termo.ts` — consent text (draft) and its version, stored with each acceptance.
+- `pages/` — `welcome/`, `document-selection/`, `evaluation/`, and `admin/` (shared `.adm-*` styles in `styles.css`).
+- `components/` — `progress-badge/`, `progresso-etapas/`, `document-card/`, `chat-message/`, `answer-choice/` (reusable, `OnPush`).
+- `testing/api-rag-fake.ts` — stateful `ApiRag` double shared by the specs (the app is **zoneless**, so specs
+  must yield the event loop once before asserting — see `estabilizar()` in `evaluation.spec.ts`).
+- `src/environments/environment.ts` — `apiBaseUrl` (must include `/api`).
 
-**Visual system:** follows `DESIGN.md` (Claude/Anthropic: cream canvas + coral + navy, editorial serif). Tokens
+**Visual system:** follows `DESIGN.md` (editorial serif layout, with the Procempa palette from `procempa.css`: white
+canvas, blue primary `#4264cd` — not the `#557cf2` of Procempa's buttons, which fails AA with white text). Tokens
 are mirrored as CSS custom properties in `src/styles.css` (never inline hex); fonts are the open substitutes
 Cormorant Garamond / Inter / JetBrains Mono, loaded from Google Fonts in `src/index.html`.
 
@@ -60,7 +81,7 @@ As the codebase grows, prefer updating this file with real architectural notes o
   `describe`/`it`/`expect` globals (see `tsconfig.spec.json` → `types: ["vitest/globals"]`) with Angular's
   `TestBed` for component tests, following the pattern in `src/app/app.spec.ts`.
 - **Routing**: `src/app/app.routes.ts` holds the `Routes` array (lazy `loadComponent` per page: `''` → welcome,
-  `documentos` → document selection, `avaliacao/:docId` → evaluation, `**` → redirect home). Wired up in
+  `documentos` → document selection, `avaliacao/:docId` → evaluation, `admin/**` → researcher area, `**` → redirect home). Wired up in
   `app.config.ts` via `provideRouter(routes, withComponentInputBinding())` — the `:docId` route param is bound
   straight into the `Evaluation` component's `docId = input.required<string>()` signal.
 - **Build budgets**: `anyComponentStyle` budget in `angular.json` was raised to 8kB warning / 16kB error.

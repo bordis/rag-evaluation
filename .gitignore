@@ -1,13 +1,14 @@
 # See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
-# Compiled output
-/dist
-/tmp
-/out-tsc
-/bazel-out
+# Compiled output (sem barra inicial: o repositorio e multi-projeto, os artefatos nascem
+# dentro de rag-evaluation-web/ e nao na raiz)
+dist/
+tmp/
+out-tsc/
+bazel-out/
 
 # Node
-/node_modules
+node_modules/
 npm-debug.log
 yarn-error.log
 
@@ -30,10 +31,10 @@ yarn-error.log
 .history/*
 
 # Miscellaneous
-/.angular/cache
+.angular/
 .sass-cache/
-/connect.lock
-/coverage
+connect.lock
+coverage/
 /libpeerconnection.log
 testem.log
 /typings
@@ -46,3 +47,28 @@ Thumbs.db
 /.agents
 skills-lock.json
 requisitos.md
+
+docs
+
+rag-evaluation-web/node_modules/*
+
+# Playwright
+/.playwright-mcp/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+latex_tese_referencial_teorico.pdf
+
+# Fontes LaTeX da dissertacao (repositorio git proprio)
+/6ab3a176c71759dcf4c8a56c/
+decisoes-dissertacao.txt
+/comparacao/
+
+# Python, em qualquer projeto
+__pycache__/
+
+# Chaves locais, em qualquer projeto
+.env
+.env.*

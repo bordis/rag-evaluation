@@ -1,0 +1,61 @@
+<h1 class="adm-titulo font-display">Estudos</h1>
+
+@if (erro(); as mensagem) {
+  <p class="adm-erro" role="alert">{{ mensagem }}</p>
+}
+
+@if (!temAberto()) {
+  <form class="adm-form" (submit)="criar($event)">
+    <h2 class="adm-subtitulo">Iniciar um estudo</h2>
+    <label>
+      Nome
+      <input name="nome" required minlength="2" placeholder="Ex.: Piloto" />
+    </label>
+    <label>
+      Descrição
+      <input name="descricao" />
+    </label>
+    <button class="adm-btn adm-btn--primario" type="submit">Iniciar estudo</button>
+  </form>
+}
+
+<table class="adm-tabela">
+  <thead>
+    <tr>
+      <th>Nome</th>
+      <th>Status</th>
+      <th>Início</th>
+      <th>Fim</th>
+      <th>Sessões</th>
+      <th>Rodadas</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (estudo of estudos(); track estudo.id) {
+      <tr>
+        <td>{{ estudo.nome }}</td>
+        <td>
+          <span class="adm-selo" [class.adm-selo--ok]="estudo.status === 'aberto'">
+            {{ estudo.status }}
+          </span>
+        </td>
+        <td>{{ estudo.iniciado_em | date: 'dd/MM/yy HH:mm' }}</td>
+        <td>{{ estudo.encerrado_em | date: 'dd/MM/yy HH:mm' }}</td>
+        <td>{{ estudo.sessoes }}</td>
+        <td>{{ estudo.rodadas_decididas }}</td>
+        <td class="adm-acoes">
+          <a [routerLink]="[estudo.id, 'avaliacoes']">Avaliações</a>
+          <a [routerLink]="[estudo.id, 'resultados']">Resultados</a>
+          @if (estudo.status === 'aberto') {
+            <button class="adm-btn" type="button" (click)="encerrar(estudo)">Encerrar</button>
+          }
+        </td>
+      </tr>
+    } @empty {
+      <tr>
+        <td colspan="7">Nenhum estudo criado. Os avaliadores só podem responder com um aberto.</td>
+      </tr>
+    }
+  </tbody>
+</table>

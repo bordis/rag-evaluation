@@ -28,9 +28,11 @@
   color: var(--color-body);
 }
 
+/* Quatro respostas: 2x2 em telas largas — em quatro colunas a coluna fica estreita demais para
+   um texto que o avaliador precisa comparar com calma. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-md);
   margin: 0;
   padding: 0;
@@ -87,7 +89,7 @@
 
 .answer__text {
   flex: 1;
-  margin: 0;
+  min-width: 0;
   font-size: 14px;
   line-height: 1.6;
   color: var(--color-body);
@@ -124,5 +126,44 @@
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+}
+
+.nenhuma {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px dashed var(--color-muted-soft);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-body);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.nenhuma:hover {
+  background-color: var(--color-surface-soft);
+  color: var(--color-ink);
+}
+
+/* Entrada em cascata: curta de propósito, porque o tempo de rodada é medido e os rótulos são
+   sorteados a cada pergunta. `backwards` para não prender a opacidade de .answer--dimmed. */
+.surgir {
+  animation: surgir 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(var(--ordem, 0) * 110ms);
+}
+
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surgir {
+    animation: none;
   }
 }

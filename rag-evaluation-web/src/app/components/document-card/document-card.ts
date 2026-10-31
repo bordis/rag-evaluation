@@ -14,10 +14,12 @@ import { ProgressBadge } from '../progress-badge/progress-badge';
 export class DocumentCard {
   readonly documento = input.required<RagDocument>();
   readonly respondidas = input.required<number>();
+  readonly total = input.required<number>();
 
+  /** Emite o `slug`, que é o identificador usado na rota `/avaliacao/:docId`. */
   readonly selecionar = output<string>();
 
   protected onSelecionar(): void {
-    this.selecionar.emit(this.documento().id);
+    this.selecionar.emit(this.documento().slug);
   }
 }

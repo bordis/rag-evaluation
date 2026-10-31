@@ -1,100 +1,170 @@
 import { TestBed } from '@angular/core/testing';
 
-import { MAX_PERGUNTAS, type RotuloCego } from '../models/evaluation-model';
+import type { RotuloCego } from '../models/evaluation-model';
+import { ApiRagFake } from '../testing/api-rag-fake';
+import { ApiRag } from './api-rag';
 import { EvaluationStore } from './evaluation-store';
 
 describe('EvaluationStore', () => {
   let store: EvaluationStore;
-  let docId: string;
+  let api: ApiRagFake;
+  const docId = 'lgpd';
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Arrange
-    TestBed.configureTestingModule({});
+    sessionStorage.clear();
+    api = new ApiRagFake();
+    TestBed.configureTestingModule({
+      providers: [{ provide: ApiRag, useValue: api }],
+    });
     store = TestBed.inject(EvaluationStore);
-    docId = store.documents()[0].id;
+    await store.iniciarSessao('v1');
+    await store.carregarCatalogo();
   });
 
-  it('askQuestion generates 3 blind answers with distinct A/B/C labels', () => {
+  it('creates the session on the server and keeps only its id in sessionStorage', () => {
+    // Assert
+    expect(store.sessionId()).toBe('sessao-de-teste');
+    expect(sessionStorage.getItem('rag-evaluation.session-id')).toBe('sessao-de-teste');
+    expect(store.documents().map((doc) => doc.slug)).toEqual(['lgpd', 'kubernetes']);
+  });
+
+  it('askQuestion appends a round with four blind A/B/C/D labels', async () => {
     // Act
-    const round = store.askQuestion(docId, 'O que é isto?');
+    const round = await store.askQuestion(docId, 'O que é isto?');
 
     // Assert
     expect(round).toBeDefined();
-    expect(round!.respostas).toHaveLength(3);
-    const rotulos = round!.respostas.map((r) => r.rotuloCego).sort();
-    expect(rotulos).toEqual(['A', 'B', 'C']);
-    const pipelines = new Set(round!.respostas.map((r) => r.pipeline));
-    expect(pipelines.size).toBe(3);
-    expect(round!.escolhaPipeline).toBeUndefined();
+    expect(round!.respostas).toHaveLength(4);
+    expect(round!.respostas.map((r) => r.rotuloCego)).toEqual(['A', 'B', 'C', 'D']);
+    expect(round!.escolhaRotulo).toBeUndefined();
+    expect(store.rounds(docId)).toHaveLength(1);
   });
 
-  it('blocks a new question while a round is pending choice', () => {
+  it('blocks a new question while a round is pending choice', async () => {
     // Arrange
-    store.askQuestion(docId, 'Primeira?');
+    await store.askQuestion(docId, 'Primeira?');
 
     // Act
-    const segunda = store.askQuestion(docId, 'Segunda?');
+    const segunda = await store.askQuestion(docId, 'Segunda?');
 
     // Assert
     expect(segunda).toBeUndefined();
     expect(store.rounds(docId)).toHaveLength(1);
   });
 
-  it('chooseAnswer records the true pipeline and increments progress', () => {
+  it('chooseAnswer records the label and advances the progress reported by the server', async () => {
     // Arrange
-    const round = store.askQuestion(docId, 'Pergunta?')!;
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
     const alvo: RotuloCego = 'B';
-    const esperado = round.respostas.find((r) => r.rotuloCego === alvo)!.pipeline;
 
     // Act
-    store.chooseAnswer(docId, round.id, alvo);
+    await store.chooseAnswer(docId, round.id, alvo);
 
     // Assert
-    const atualizado = store.rounds(docId)[0];
-    expect(atualizado.escolhaRotulo).toBe(alvo);
-    expect(atualizado.escolhaPipeline).toBe(esperado);
+    expect(store.rounds(docId)[0].escolhaRotulo).toBe(alvo);
     expect(store.answeredCount(docId)).toBe(1);
     expect(store.hasPendingRound(docId)).toBe(false);
   });
 
-  it('marks the document complete after MAX_PERGUNTAS answered rounds', () => {
+  it('marks the document complete once the server reports MAX_PERGUNTAS answers', async () => {
+    // Arrange
+    api.maxPerguntas = 3;
+
     // Act
-    for (let i = 0; i < MAX_PERGUNTAS; i++) {
-      const round = store.askQuestion(docId, `Pergunta ${i}?`)!;
-      store.chooseAnswer(docId, round.id, 'A');
+    for (let i = 0; i < 3; i++) {
+      const round = (await store.askQuestion(docId, `Pergunta ${i}?`))!;
+      await store.chooseAnswer(docId, round.id, 'A');
     }
 
     // Assert
-    expect(store.answeredCount(docId)).toBe(MAX_PERGUNTAS);
+    expect(store.answeredCount(docId)).toBe(3);
     expect(store.isComplete(docId)).toBe(true);
     expect(store.remaining(docId)).toBe(0);
     expect(store.totalConcluidos()).toBe(1);
+    expect(await store.askQuestion(docId, 'Uma a mais?')).toBeUndefined();
   });
 
-  it('does not allow more questions once the document is complete', () => {
+  it('keeps progress isolated per document', async () => {
     // Arrange
-    for (let i = 0; i < MAX_PERGUNTAS; i++) {
-      const round = store.askQuestion(docId, `P${i}`)!;
-      store.chooseAnswer(docId, round.id, 'A');
-    }
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
 
     // Act
-    const extra = store.askQuestion(docId, 'Uma a mais?');
-
-    // Assert
-    expect(extra).toBeUndefined();
-    expect(store.rounds(docId)).toHaveLength(MAX_PERGUNTAS);
-  });
-
-  it('keeps progress isolated per document', () => {
-    // Arrange
-    const outroDoc = store.documents()[1].id;
-    const round = store.askQuestion(docId, 'Pergunta?')!;
-    store.chooseAnswer(docId, round.id, 'A');
+    await store.chooseAnswer(docId, round.id, 'A');
 
     // Assert
     expect(store.answeredCount(docId)).toBe(1);
-    expect(store.answeredCount(outroDoc)).toBe(0);
-    expect(store.isComplete(outroDoc)).toBe(false);
+    expect(store.answeredCount('kubernetes')).toBe(0);
+    expect(store.isComplete('kubernetes')).toBe(false);
+  });
+
+  it('surfaces the API failure message instead of throwing', async () => {
+    // Arrange
+    api.falha = new Error('Não foi possível falar com o servidor.');
+
+    // Act
+    const round = await store.askQuestion(docId, 'Pergunta?');
+
+    // Assert
+    expect(round).toBeUndefined();
+    expect(store.erro()).toBe('Não foi possível falar com o servidor.');
+    expect(store.gerando()).toBe(false);
+  });
+
+  it('reuses the session id already stored instead of creating another one', async () => {
+    // Arrange
+    sessionStorage.setItem('rag-evaluation.session-id', 'sessao-anterior');
+    const outraApi = new ApiRagFake();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [{ provide: ApiRag, useValue: outraApi }] });
+    const outroStore = TestBed.inject(EvaluationStore);
+
+    // Act
+    const sessionId = await outroStore.iniciarSessao('v1');
+
+    // Assert
+    expect(sessionId).toBe('sessao-anterior');
+    expect(outraApi.termoRecebido).toBeNull();
+  });
+
+  it('records "none is correct" as a decision without a chosen label', async () => {
+    // Arrange
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+
+    // Act
+    await store.chooseAnswer(docId, round.id, null);
+
+    // Assert
+    expect(api.ultimoRotulo).toBeNull();
+    expect(store.rounds(docId)[0].nenhumaCorreta).toBe(true);
+    expect(store.answeredCount(docId)).toBe(1);
+    expect(store.hasPendingRound(docId)).toBe(false);
+  });
+
+  it('sends the round timing measured in the browser with the choice', async () => {
+    // Arrange
+    await store.abrirDocumento(docId);
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+
+    // Act
+    await store.chooseAnswer(docId, round.id, 'A');
+
+    // Assert
+    expect(api.temposRecebidos?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(api.temposRecebidos?.geracaoMs).toBeGreaterThanOrEqual(0);
+    expect(api.temposRecebidos?.ocultoMs).toBe(0);
+  });
+
+  it('discards a session whose study has closed', async () => {
+    // Arrange
+    api.estudoAberto = false;
+
+    // Act
+    const valida = await store.sessaoValida();
+
+    // Assert
+    expect(valida).toBe(false);
+    expect(store.sessionId()).toBeNull();
+    expect(sessionStorage.getItem('rag-evaluation.session-id')).toBeNull();
   });
 });
