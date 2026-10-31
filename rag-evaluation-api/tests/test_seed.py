@@ -24,7 +24,7 @@ def test_pipelines_de_controle_nascem_com_retrieval_desligado(sessao: Session):
     por_codigo = {p.codigo: p for p in sessao.exec(select(Pipeline)).all()}
     for codigo in ("pipeline-1", "pipeline-2"):
         config = por_codigo[codigo].config
-        assert config["query_rewriting"] is False
+        assert config["hyde"] is False
         assert config["reranking"] is False
         assert config["hybrid_search"] is False
         assert config["sliding_window"]["ativo"] is False

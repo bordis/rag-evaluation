@@ -37,9 +37,11 @@ describe('ApiRag', () => {
     const requisicao = http.expectOne(`${base}/sessions/sessao-1/documents/lgpd/questions`);
     requisicao.flush({
       id: 'rodada-1',
+      ordem: 3,
       pergunta: 'O que a lei diz?',
       respostas: [{ id: 'r-a', rotulo: 'A', texto: 'Texto A' }],
       escolha_rotulo: null,
+      nenhuma_correta: false,
       escolhido_em: null,
     });
 
@@ -47,26 +49,48 @@ describe('ApiRag', () => {
     expect(requisicao.request.body).toEqual({ pergunta: 'O que a lei diz?' });
     await expect(promessa).resolves.toEqual({
       id: 'rodada-1',
+      ordem: 3,
       pergunta: 'O que a lei diz?',
       respostas: [{ id: 'r-a', rotuloCego: 'A', texto: 'Texto A' }],
       escolhaRotulo: undefined,
+      nenhumaCorreta: false,
       escolhidoEm: undefined,
     });
   });
 
-  it('sends null instead of empty strings when the profile is skipped', async () => {
+  it('creates the session only with the accepted term', async () => {
     // Act
-    const promessa = api.criarSessao({});
+    const promessa = api.criarSessao('v1');
     const requisicao = http.expectOne(`${base}/sessions`);
     requisicao.flush({ id: 'sessao-1' });
 
     // Assert
-    expect(requisicao.request.body).toEqual({
-      area_atuacao: null,
-      familiaridade: null,
-      tempo_experiencia: null,
-    });
+    expect(requisicao.request.body).toEqual({ aceite: true, termo_versao: 'v1' });
     await expect(promessa).resolves.toBe('sessao-1');
+  });
+
+  it('sends a null label and the browser timings when none is correct', async () => {
+    // Act
+    const promessa = api.escolher('rodada-1', null, { totalMs: 90, geracaoMs: 20, ocultoMs: 5 });
+    const requisicao = http.expectOne(`${base}/rounds/rodada-1/choice`);
+    requisicao.flush({
+      id: 'rodada-1',
+      ordem: 1,
+      pergunta: 'P?',
+      respostas: [],
+      escolha_rotulo: null,
+      nenhuma_correta: true,
+      escolhido_em: '2026-10-30T10:00:00Z',
+    });
+
+    // Assert
+    expect(requisicao.request.body).toEqual({
+      rotulo: null,
+      tempo_total_ms: 90,
+      tempo_geracao_ms: 20,
+      tempo_oculto_ms: 5,
+    });
+    await expect(promessa).resolves.toMatchObject({ nenhumaCorreta: true });
   });
 
   it('turns the API detail into the message shown to the evaluator', async () => {

@@ -18,6 +18,7 @@ describe('EvaluationStore', () => {
       providers: [{ provide: ApiRag, useValue: api }],
     });
     store = TestBed.inject(EvaluationStore);
+    await store.iniciarSessao('v1');
     await store.carregarCatalogo();
   });
 
@@ -119,10 +120,51 @@ describe('EvaluationStore', () => {
     const outroStore = TestBed.inject(EvaluationStore);
 
     // Act
-    const sessionId = await outroStore.garantirSessao();
+    const sessionId = await outroStore.iniciarSessao('v1');
 
     // Assert
     expect(sessionId).toBe('sessao-anterior');
-    expect(outraApi.perfilRecebido).toBeNull();
+    expect(outraApi.termoRecebido).toBeNull();
+  });
+
+  it('records "none is correct" as a decision without a chosen label', async () => {
+    // Arrange
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+
+    // Act
+    await store.chooseAnswer(docId, round.id, null);
+
+    // Assert
+    expect(api.ultimoRotulo).toBeNull();
+    expect(store.rounds(docId)[0].nenhumaCorreta).toBe(true);
+    expect(store.answeredCount(docId)).toBe(1);
+    expect(store.hasPendingRound(docId)).toBe(false);
+  });
+
+  it('sends the round timing measured in the browser with the choice', async () => {
+    // Arrange
+    await store.abrirDocumento(docId);
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+
+    // Act
+    await store.chooseAnswer(docId, round.id, 'A');
+
+    // Assert
+    expect(api.temposRecebidos?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(api.temposRecebidos?.geracaoMs).toBeGreaterThanOrEqual(0);
+    expect(api.temposRecebidos?.ocultoMs).toBe(0);
+  });
+
+  it('discards a session whose study has closed', async () => {
+    // Arrange
+    api.estudoAberto = false;
+
+    // Act
+    const valida = await store.sessaoValida();
+
+    // Assert
+    expect(valida).toBe(false);
+    expect(store.sessionId()).toBeNull();
+    expect(sessionStorage.getItem('rag-evaluation.session-id')).toBeNull();
   });
 });

@@ -1,0 +1,75 @@
+<h1 class="adm-titulo font-display">Pipelines</h1>
+
+@if (erro(); as mensagem) {
+  <p class="adm-erro" role="alert">{{ mensagem }}</p>
+}
+
+<div class="adm-cartoes">
+  @for (pipeline of pipelines(); track pipeline.id) {
+    <article class="adm-cartao">
+      <header class="adm-cartao__topo">
+        <h2 class="adm-subtitulo">{{ pipeline.codigo }} · {{ pipeline.nome }}</h2>
+        <span class="adm-selo" [class.adm-selo--ok]="pipeline.ativo">
+          {{ pipeline.ativo ? 'ativo' : 'inativo' }}
+        </span>
+      </header>
+      <p>
+        Parser <strong>{{ pipeline.parser }}</strong> · collection
+        <code>{{ pipeline.collection_name }}</code>
+        @if (pipeline.controle) {
+          · braço de controle
+        }
+      </p>
+      @if (editando() === pipeline.id) {
+        <label>
+          Configuração (JSON)
+          <textarea #config class="adm-json" rows="12">{{ pipeline.config | json }}</textarea>
+        </label>
+        <div class="adm-acoes">
+          <button
+            class="adm-btn adm-btn--primario"
+            type="button"
+            (click)="salvar(pipeline, config.value)"
+          >
+            Salvar
+          </button>
+          <button class="adm-btn" type="button" (click)="editando.set(null)">Cancelar</button>
+        </div>
+      } @else {
+        <pre class="adm-json">{{ pipeline.config | json }}</pre>
+        <div class="adm-acoes">
+          <button class="adm-btn" type="button" (click)="editando.set(pipeline.id)">Editar</button>
+          <button class="adm-btn" type="button" (click)="alternar(pipeline)">
+            {{ pipeline.ativo ? 'Desativar' : 'Ativar' }}
+          </button>
+          <button class="adm-btn" type="button" (click)="excluir(pipeline)">Excluir</button>
+        </div>
+      }
+    </article>
+  }
+</div>
+
+<form class="adm-form" (submit)="criar($event)">
+  <h2 class="adm-subtitulo">Novo pipeline</h2>
+  <p>Nasce inativo e precisa de documentos ingeridos antes de entrar em um estudo.</p>
+  <label>
+    Código
+    <input name="codigo" required pattern="[a-z0-9\-]+" placeholder="pipeline-5" />
+  </label>
+  <label>
+    Nome
+    <input name="nome" required minlength="2" />
+  </label>
+  <label>
+    Parser
+    <select name="parser">
+      <option value="raw">raw</option>
+      <option value="docling">docling</option>
+    </select>
+  </label>
+  <label>
+    Collection do Milvus
+    <input name="collection_name" required pattern="[A-Za-z_][A-Za-z0-9_]*" />
+  </label>
+  <button class="adm-btn adm-btn--primario" type="submit">Criar</button>
+</form>

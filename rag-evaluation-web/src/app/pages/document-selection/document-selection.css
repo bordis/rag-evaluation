@@ -26,7 +26,7 @@
   font-size: 44px;
   line-height: 1.1;
   letter-spacing: -0.02em;
-  color: var(--color-ink);
+  color: var(--color-heading);
 }
 
 .head__lead {

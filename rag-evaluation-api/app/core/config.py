@@ -42,18 +42,46 @@ class Settings(BaseSettings):
     # Docling
     docling_url: str = "http://localhost:5001"
     # Converter um PDF grande leva minutos; o timeout de consulta (60s) nao serve aqui.
-    docling_timeout_seconds: int = 600
+    docling_timeout_seconds: int = 1800
     # OCR desligado: os documentos do estudo sao PDFs digitais. Ligado, o Docling carregaria
     # modelos de visao e o tempo de ingestao deixaria de ser comparavel ao do parser raw.
     docling_do_ocr: bool = False
+    docling_pdf_backend: str = "pypdfium2"
+    docling_table_mode: str = "accurate"
+    docling_descrever_imagens: bool = True
+    docling_imagem_area_minima: float = 0.05
+    docling_imagem_modelo: str = "gpt-4.1-mini"
+
+    # Reordenador local dos pipelines 3 e 4, servido pelo container rag-reranker
+    reranker_url: str = "http://localhost:8081"
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+
+    # Precos em US$ por milhao de tokens (entrada, saida), para a analise de custo. A reordenacao
+    # roda localmente: custa tempo e CPU, nao dolares.
+    precos_modelos: dict[str, tuple[float, float]] = {
+        "gpt-4.1-mini": (0.40, 1.60),
+        "gpt-4.1": (3.00, 12.00),
+        "text-embedding-3-small": (0.02, 0.02),
+    }
+
+    # RAGAS
+    ragas_llm_model: str = "gpt-4.1"
 
     # RAG
-    rag_search_limit: int = 5
-    chunk_size: int = 800
-    chunk_overlap: int = 150
+    # Chunks entregues ao LLM nos 4 pipelines (decisao 4 da ficha).
+    rag_search_limit: int = 15
+    # Ancoras antes dos vizinhos nos pipelines 3 e 4.
+    rag_ancoras: int = 5
+    # Em tokens (cl100k_base), cortando em fim de frase. Sem sobreposicao: o que ela atenuaria e o
+    # que os vizinhos do fator B tratam, e os vizinhos repetiriam o texto sobreposto no contexto.
+    chunk_size: int = 256
+    chunk_overlap: int = 0
+    # 15 ja garantem completar o contexto; os 5 a mais dao margem para a reordenacao. Em CPU, cada
+    # candidato custa quase 1 s de espera para o avaliador, entao mais que isso pesa na coleta.
     rerank_candidates: int = 20
     sliding_window_size: int = 1
-    pipeline_timeout_seconds: int = 60
+    # A reordenacao forma fila: com avaliadores simultaneos, a espera se soma.
+    pipeline_timeout_seconds: int = 300
     max_perguntas: int = 10
     max_upload_mb: int = 25
 

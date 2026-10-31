@@ -1,0 +1,152 @@
+@if (erro(); as mensagem) {
+  <p class="adm-erro" role="alert">{{ mensagem }}</p>
+}
+
+@if (avaliacao(); as dados) {
+  <a class="adm-voltar" [routerLink]="['/admin/estudos', dados.study_id, 'avaliacoes']">
+    ← Avaliações de {{ dados.estudo_nome }}
+  </a>
+  <h1 class="adm-titulo font-display">{{ dados.documento_titulo }}</h1>
+  <p>
+    Avaliador <code>{{ dados.session_id.slice(0, 8) }}</code> · termo
+    {{ dados.termo_versao }}
+  </p>
+
+  @if (dados.rodadas.length === 0) {
+    <p>Este ciclo ainda não tem rodadas.</p>
+  }
+
+  <div class="adm-paginacao" role="group" aria-label="Perguntas">
+    @for (rodada of dados.rodadas; track rodada.id; let i = $index) {
+      <button
+        type="button"
+        class="adm-btn"
+        [class.adm-btn--primario]="indice() === i"
+        (click)="indice.set(i)"
+      >
+        {{ rodada.ordem }}
+      </button>
+    }
+  </div>
+
+  @if (rodada(); as atual) {
+    <section class="adm-cartao">
+      <h2 class="adm-subtitulo">Pergunta {{ atual.ordem }}: {{ atual.pergunta }}</h2>
+      <p>
+        @if (atual.nenhuma_correta) {
+          <span class="adm-selo adm-selo--erro">Nenhuma está correta</span>
+        } @else if (!atual.decidida) {
+          <span class="adm-selo">Pendente</span>
+        }
+        Tempo total {{ segundos(atual.tempo_total_ms) }} · espera pela geração
+        {{ segundos(atual.tempo_geracao_ms) }} · aba oculta
+        {{ segundos(atual.tempo_oculto_ms) }}
+      </p>
+      <button class="adm-btn" type="button" [disabled]="calculando()" (click)="calcularRagas()">
+        @if (calculando()) {
+          Calculando…
+        } @else {
+          Calcular RAGAS desta rodada (gasta créditos)
+        }
+      </button>
+    </section>
+
+    @for (resposta of atual.respostas; track resposta.id) {
+      <article class="adm-cartao" [class.adm-cartao--escolhida]="resposta.escolhida">
+        <header class="adm-cartao__topo">
+          <h3 class="adm-subtitulo">
+            Resposta {{ resposta.rotulo }} (posição {{ resposta.posicao_exibida }}) ·
+            {{ resposta.pipeline_codigo }}
+          </h3>
+          @if (resposta.escolhida) {
+            <span class="adm-selo adm-selo--ok">Escolhida</span>
+          }
+        </header>
+        <div class="md" [innerHTML]="resposta.texto | markdown"></div>
+
+        @if (resposta.ragas; as ragas) {
+          @if (ragas.erro) {
+            <p class="adm-erro">RAGAS falhou: {{ ragas.erro }}</p>
+          } @else {
+            <p>
+              RAGAS: média {{ ragas.media | number: '1.2-2' }} · fidelidade
+              {{ ragas.fidelidade | number: '1.2-2' }} · relevância
+              {{ ragas.relevancia_resposta | number: '1.2-2' }} · precisão do contexto
+              {{ ragas.precisao_contexto | number: '1.2-2' }}
+            </p>
+          }
+        }
+
+        <details>
+          <summary>Tempo e tokens por etapa</summary>
+          <table class="adm-tabela adm-tabela--interna">
+            <thead>
+              <tr>
+                <th>Etapa</th>
+                <th>ms</th>
+                <th>Tokens</th>
+                <th>US$</th>
+                <th>Modelo</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (metrica of resposta.metricas; track metrica.etapa) {
+                <tr>
+                  <td>{{ metrica.etapa }}</td>
+                  <td>{{ metrica.duracao_ms }}</td>
+                  <td>{{ metrica.tokens_total ?? '—' }}</td>
+                  <td>
+                    {{ metrica.custo_usd === null ? '—' : (metrica.custo_usd | number: '1.5-5') }}
+                  </td>
+                  <td>{{ metrica.modelo ?? '—' }}</td>
+                  <td>
+                    <code class="adm-pequeno">{{ metrica.detalhes | json }}</code>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </details>
+
+        @for (etapa of etapas(resposta); track etapa.nome) {
+          <details [open]="etapa.nome === 'contexto_final'">
+            <summary>{{ nomeEtapa(etapa.nome) }} ({{ etapa.chunks.length }})</summary>
+            <table class="adm-tabela adm-tabela--interna">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Chunk</th>
+                  <th>Score</th>
+                  <th>Denso</th>
+                  <th>BM25</th>
+                  <th>Origem</th>
+                  <th>Conteúdo</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (chunk of etapa.chunks; track chunk.posicao) {
+                  <tr>
+                    <td>{{ chunk.posicao }}</td>
+                    <td>{{ chunk.chunk_index }}</td>
+                    <td>{{ chunk.score_final | number: '1.3-3' }}</td>
+                    <td>
+                      {{ chunk.score_denso === null ? '—' : (chunk.score_denso | number: '1.3-3') }}
+                    </td>
+                    <td>
+                      {{
+                        chunk.score_esparso === null ? '—' : (chunk.score_esparso | number: '1.3-3')
+                      }}
+                    </td>
+                    <td>{{ chunk.origem ?? '—' }}</td>
+                    <td class="adm-trecho">{{ chunk.texto }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </details>
+        }
+      </article>
+    }
+  }
+}

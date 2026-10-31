@@ -19,6 +19,11 @@ EXTENSOES_SUPORTADAS: dict[str, str] = {
 }
 
 
+# O acervo do estudo e so de PDF digital (decisao 9): o texto bruto de outros formatos nao e
+# comparavel ao de um PDF. Os parsers continuam aceitando os demais; a porta de entrada e que fecha.
+MIME_DO_ACERVO = "application/pdf"
+
+
 class ErroDeParsing(RuntimeError):
     """Falha ao extrair texto. Derruba a ingestao apenas do pipeline afetado."""
 

@@ -62,6 +62,7 @@ def expandir_janela(
             chunk_index=int(linha[CAMPO_CHUNK]),
             texto=linha[CAMPO_TEXTO],
             vizinho=True,
+            origem="vizinho",
         )
         for linha in linhas
     }

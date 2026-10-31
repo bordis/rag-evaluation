@@ -1,6 +1,9 @@
 import json
-from types import SimpleNamespace
 
+import httpx
+import pytest
+
+from app.core.config import get_settings
 from app.models.telemetry import EtapaPipeline
 from app.rag.retrieval.base import Candidato
 from app.rag.retrieval.rerank import reordenar
@@ -15,113 +18,81 @@ def _candidatos(quantidade: int) -> list[Candidato]:
             chunk_index=numero,
             texto=f"trecho {numero}",
             score_final=0.5,
+            score_denso=0.7,
         )
         for numero in range(quantidade)
     ]
 
 
-class ClienteFalso:
-    def __init__(self, texto: str) -> None:
-        self.chamadas: list[dict] = []
-        self.texto = texto
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
-
-    def _create(self, **argumentos):
-        self.chamadas.append(argumentos)
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=self.texto))],
-            usage=SimpleNamespace(prompt_tokens=400, completion_tokens=20, total_tokens=420),
-            model="gpt-4.1-mini-2025-04-14",
+def _cliente(ordem: list[int], capturadas: list[dict] | None = None) -> httpx.Client:
+    def responder(requisicao: httpx.Request) -> httpx.Response:
+        if capturadas is not None:
+            capturadas.append(json.loads(requisicao.content))
+        return httpx.Response(
+            200,
+            headers={"x-inference-time": "90", "x-queue-time": "10"},
+            json=[
+                {"index": indice, "score": 1 - posicao / 10} for posicao, indice in enumerate(ordem)
+            ],
         )
 
-
-def _cliente_com_ordem(ordem: list[int]) -> ClienteFalso:
-    return ClienteFalso(json.dumps({"ordem": ordem}))
-
-
-def test_reordena_conforme_a_resposta_do_modelo():
-    candidatos, _ = reordenar(
-        PERGUNTA, _candidatos(4), manter=4, cliente=_cliente_com_ordem([3, 1, 4, 2])
+    return httpx.Client(
+        transport=httpx.MockTransport(responder), base_url="http://reordenador.invalido"
     )
-    assert [candidato.chunk_index for candidato in candidatos] == [2, 0, 3, 1]
 
 
-def test_corta_na_quantidade_pedida():
-    candidatos, _ = reordenar(
-        PERGUNTA, _candidatos(6), manter=2, cliente=_cliente_com_ordem([5, 2, 1, 3, 4, 6])
-    )
-    assert [candidato.chunk_index for candidato in candidatos] == [4, 1]
+def test_devolve_todos_na_ordem_do_modelo_com_o_score_dele():
+    ordenados, _ = reordenar(PERGUNTA, _candidatos(3), cliente=_cliente([2, 0, 1]))
+
+    assert [item.chunk_index for item in ordenados] == [2, 0, 1]
+    assert [item.score_final for item in ordenados] == [1.0, 0.9, 0.8]
 
 
-def test_candidatos_nao_citados_pelo_modelo_vao_para_o_fim():
-    """Nada pode sumir: um candidato omitido ainda e melhor que nenhum, se o corte alcancar."""
-    candidatos, _ = reordenar(
-        PERGUNTA, _candidatos(4), manter=4, cliente=_cliente_com_ordem([2, 1])
-    )
-    assert [candidato.chunk_index for candidato in candidatos] == [1, 0, 2, 3]
+def test_preserva_os_demais_campos_sem_mutar_a_lista_da_fusao():
+    candidatos = _candidatos(2)
+
+    ordenados, _ = reordenar(PERGUNTA, candidatos, cliente=_cliente([1, 0]))
+
+    assert ordenados[0].score_denso == 0.7
+    assert candidatos[0].score_final == 0.5
 
 
-def test_indices_fora_da_faixa_sao_ignorados_sem_quebrar():
-    candidatos, _ = reordenar(
-        PERGUNTA, _candidatos(3), manter=3, cliente=_cliente_com_ordem([9, 2, 0, -1, 1])
-    )
-    assert [candidato.chunk_index for candidato in candidatos] == [1, 0, 2]
+def test_julga_contra_a_pergunta_e_o_texto_integral():
+    capturadas: list[dict] = []
+
+    reordenar(PERGUNTA, _candidatos(1), cliente=_cliente([0], capturadas))
+
+    assert capturadas[0]["query"] == PERGUNTA
+    assert capturadas[0]["texts"] == ["trecho 0"]
 
 
-def test_indice_repetido_nao_duplica_o_candidato():
-    candidatos, _ = reordenar(
-        PERGUNTA, _candidatos(3), manter=3, cliente=_cliente_com_ordem([2, 2, 1])
-    )
-    assert [candidato.chunk_index for candidato in candidatos] == [1, 0, 2]
+def test_lista_vazia_nao_chama_o_servico():
+    capturadas: list[dict] = []
 
+    ordenados, metrica = reordenar(PERGUNTA, [], cliente=_cliente([], capturadas))
 
-def test_json_invalido_mantem_a_ordem_original_e_marca_fallback():
-    candidatos, metrica = reordenar(
-        PERGUNTA, _candidatos(3), manter=2, cliente=ClienteFalso("nao sou json")
-    )
-    assert [candidato.chunk_index for candidato in candidatos] == [0, 1]
-    assert metrica.detalhes["fallback"] is True
-
-
-def test_json_sem_a_chave_ordem_marca_fallback():
-    candidatos, metrica = reordenar(
-        PERGUNTA, _candidatos(3), manter=3, cliente=ClienteFalso('{"resultado": [1]}')
-    )
-    assert [candidato.chunk_index for candidato in candidatos] == [0, 1, 2]
-    assert metrica.detalhes["fallback"] is True
-
-
-def test_lista_vazia_nao_chama_o_modelo():
-    cliente = _cliente_com_ordem([1])
-    candidatos, metrica = reordenar(PERGUNTA, [], manter=5, cliente=cliente)
-    assert candidatos == []
-    assert cliente.chamadas == []
-    assert metrica.tokens_total is None
-
-
-def test_metrica_registra_quantos_entraram_e_quantos_sairam():
-    _, metrica = reordenar(
-        PERGUNTA, _candidatos(6), manter=2, cliente=_cliente_com_ordem([1, 2, 3, 4, 5, 6])
-    )
+    assert ordenados == []
+    assert capturadas == []
     assert metrica.etapa is EtapaPipeline.RERANKING
-    assert metrica.detalhes["candidatos"] == 6
-    assert metrica.detalhes["mantidos"] == 2
-    assert metrica.detalhes["fallback"] is False
-    assert metrica.tokens_total == 420
 
 
-def test_pede_json_ao_modelo():
-    cliente = _cliente_com_ordem([1])
-    reordenar(PERGUNTA, _candidatos(1), manter=1, cliente=cliente)
-    assert cliente.chamadas[0]["response_format"] == {"type": "json_object"}
+def test_metrica_separa_a_inferencia_da_espera_na_fila():
+    _, metrica = reordenar(PERGUNTA, _candidatos(2), cliente=_cliente([0, 1]))
+
+    assert metrica.detalhes == {
+        "candidatos": 2,
+        "provedor": "tei",
+        "inferencia_ms": 90,
+        "fila_ms": 10,
+    }
+    assert metrica.modelo == get_settings().reranker_model
 
 
-def test_trechos_longos_sao_truncados_no_prompt():
-    """O re-rank ve ate 20 candidatos; sem truncar, o prompt explodiria em tokens."""
-    from app.rag.retrieval.rerank import TAMANHO_MAXIMO_DO_TRECHO
+def test_falha_do_servico_sobe_em_vez_de_cair_para_a_ordem_da_busca():
+    cliente = httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(500)),
+        base_url="http://reordenador.invalido",
+    )
 
-    longo = [Candidato(milvus_id=1, chunk_index=0, texto="x" * 5000)]
-    cliente = _cliente_com_ordem([1])
-    reordenar(PERGUNTA, longo, manter=1, cliente=cliente)
-    conteudo = cliente.chamadas[0]["messages"][-1]["content"]
-    assert "x" * (TAMANHO_MAXIMO_DO_TRECHO + 1) not in conteudo
+    with pytest.raises(httpx.HTTPStatusError):
+        reordenar(PERGUNTA, _candidatos(2), cliente=cliente)

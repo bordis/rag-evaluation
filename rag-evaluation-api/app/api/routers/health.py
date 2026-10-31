@@ -37,9 +37,25 @@ def verificar_docling() -> ComponenteSaude:
         return ComponenteSaude(nome="docling", disponivel=False, erro=str(erro)[:200])
 
 
+def verificar_reordenador() -> ComponenteSaude:
+    import httpx
+
+    try:
+        resposta = httpx.get(f"{get_settings().reranker_url}/health", timeout=5)
+        resposta.raise_for_status()
+        return ComponenteSaude(nome="reordenador", disponivel=True)
+    except Exception as erro:
+        return ComponenteSaude(nome="reordenador", disponivel=False, erro=str(erro)[:200])
+
+
 @router.get("/health")
 def verificar_saude(response: Response) -> RespostaSaude:
-    componentes = [verificar_postgres(), verificar_milvus(), verificar_docling()]
+    componentes = [
+        verificar_postgres(),
+        verificar_milvus(),
+        verificar_docling(),
+        verificar_reordenador(),
+    ]
     saudavel = all(componente.disponivel for componente in componentes)
     if not saudavel:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

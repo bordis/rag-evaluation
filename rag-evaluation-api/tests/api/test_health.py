@@ -8,22 +8,29 @@ from app.schemas.health import ComponenteSaude
 client = TestClient(app)
 
 
-def test_health_reporta_os_tres_componentes():
+def test_health_reporta_todos_os_componentes():
     with (
         patch("app.api.routers.health.verificar_postgres") as pg,
         patch("app.api.routers.health.verificar_milvus") as milvus,
         patch("app.api.routers.health.verificar_docling") as docling,
+        patch("app.api.routers.health.verificar_reordenador") as reordenador,
     ):
         pg.return_value = ComponenteSaude(nome="postgres", disponivel=True)
         milvus.return_value = ComponenteSaude(nome="milvus", disponivel=True)
         docling.return_value = ComponenteSaude(nome="docling", disponivel=True)
+        reordenador.return_value = ComponenteSaude(nome="reordenador", disponivel=True)
 
         resposta = client.get("/api/health")
 
     assert resposta.status_code == 200
     corpo = resposta.json()
     assert corpo["saudavel"] is True
-    assert {c["nome"] for c in corpo["componentes"]} == {"postgres", "milvus", "docling"}
+    assert {c["nome"] for c in corpo["componentes"]} == {
+        "postgres",
+        "milvus",
+        "docling",
+        "reordenador",
+    }
 
 
 def test_health_fica_degradado_quando_um_componente_cai():
@@ -31,12 +38,14 @@ def test_health_fica_degradado_quando_um_componente_cai():
         patch("app.api.routers.health.verificar_postgres") as pg,
         patch("app.api.routers.health.verificar_milvus") as milvus,
         patch("app.api.routers.health.verificar_docling") as docling,
+        patch("app.api.routers.health.verificar_reordenador") as reordenador,
     ):
         pg.return_value = ComponenteSaude(nome="postgres", disponivel=True)
         milvus.return_value = ComponenteSaude(nome="milvus", disponivel=True)
         docling.return_value = ComponenteSaude(
             nome="docling", disponivel=False, erro="Connection refused"
         )
+        reordenador.return_value = ComponenteSaude(nome="reordenador", disponivel=True)
 
         resposta = client.get("/api/health")
 

@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.models.document import Document, StatusDocumento
 from app.models.evaluation import EvaluationSession, QuestionRound
+from app.models.study import StatusEstudo, Study
 from app.schemas.evaluation import EscolhaEntrada, RespostaCega, RodadaDetalhe
 from app.services.evaluation import (
     ErroDeRodada,
@@ -43,7 +44,9 @@ def _montar_rodada(sessao: Session, rodada: QuestionRound) -> RodadaDetalhe:
             RespostaCega(id=item.id, rotulo=item.rotulo_cego, texto=item.texto)
             for item in respostas
         ],
+        ordem=rodada.ordem,
         escolha_rotulo=escolhida.rotulo_cego if escolhida else None,
+        nenhuma_correta=rodada.nenhuma_correta,
         criado_em=rodada.criado_em,
         escolhido_em=rodada.escolhido_em,
     )
@@ -54,6 +57,13 @@ def _obter_sessao_avaliador(sessao: Session, session_id: uuid.UUID) -> Evaluatio
     if avaliador is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada.")
     return avaliador
+
+
+def _exigir_estudo_aberto(sessao: Session, avaliador: EvaluationSession) -> None:
+    """Encerrado o estudo, os dados dele ficam congelados."""
+    estudo = sessao.get(Study, avaliador.study_id)
+    if estudo is None or estudo.status is not StatusEstudo.ABERTO:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Este estudo já foi encerrado.")
 
 
 def _obter_documento(sessao: Session, slug: str) -> Document:
@@ -70,7 +80,7 @@ async def fazer_pergunta(
     sessao: SessionDep, session_id: uuid.UUID, slug: str, pergunta: PerguntaBody
 ) -> RodadaDetalhe:
     """Dispara os pipelines em paralelo e devolve as respostas ja embaralhadas nos rotulos."""
-    _obter_sessao_avaliador(sessao, session_id)
+    _exigir_estudo_aberto(sessao, _obter_sessao_avaliador(sessao, session_id))
     documento = _obter_documento(sessao, slug)
     if documento.status is not StatusDocumento.PRONTO:
         raise HTTPException(
@@ -122,8 +132,9 @@ def escolher_resposta(
     rodada = sessao.get(QuestionRound, round_id)
     if rodada is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Rodada não encontrada.")
-    if rodada.escolha_answer_id is not None:
+    if rodada.escolhido_em is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta rodada já foi decidida.")
+    _exigir_estudo_aberto(sessao, _obter_sessao_avaliador(sessao, rodada.session_id))
 
     resposta = next(
         (
@@ -133,11 +144,18 @@ def escolher_resposta(
         ),
         None,
     )
-    if resposta is None:
+    if escolha.rotulo is not None and resposta is None:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"A rodada não tem resposta com o rótulo '{escolha.rotulo}'.",
         )
 
-    registrar_escolha(sessao, rodada, resposta)
+    registrar_escolha(
+        sessao,
+        rodada,
+        resposta,
+        tempo_total_ms=escolha.tempo_total_ms,
+        tempo_geracao_ms=escolha.tempo_geracao_ms,
+        tempo_oculto_ms=escolha.tempo_oculto_ms,
+    )
     return _montar_rodada(sessao, rodada)

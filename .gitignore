@@ -52,3 +52,23 @@ docs
 
 rag-evaluation-web/node_modules/*
 
+# Playwright
+/.playwright-mcp/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+latex_tese_referencial_teorico.pdf
+
+# Fontes LaTeX da dissertacao (repositorio git proprio)
+/6ab3a176c71759dcf4c8a56c/
+decisoes-dissertacao.txt
+/comparacao/
+
+# Python, em qualquer projeto
+__pycache__/
+
+# Chaves locais, em qualquer projeto
+.env
+.env.*

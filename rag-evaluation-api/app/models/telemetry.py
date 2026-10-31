@@ -1,20 +1,32 @@
 import uuid
+from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Column
+from sqlalchemy import BigInteger, Column, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel
 
 from app.models._types import coluna_enum
 
 
 class EtapaPipeline(StrEnum):
-    QUERY_REWRITING = "query_rewriting"
+    HYDE = "hyde"
     EMBEDDING_QUERY = "embedding_query"
     RETRIEVAL = "retrieval"
     RERANKING = "reranking"
     WINDOW_EXPANSION = "window_expansion"
     GENERATION = "generation"
+
+
+class EtapaChunk(StrEnum):
+    """Em que ponto do pipeline a lista foi observada; separa erro de recuperacao e de geracao."""
+
+    DENSO = "denso"
+    ESPARSO = "esparso"
+    FUSAO = "fusao"
+    REORDENACAO = "reordenacao"
+    CONTEXTO_FINAL = "contexto_final"
 
 
 class AnswerStageMetric(SQLModel, table=True):
@@ -41,10 +53,35 @@ class RetrievedChunk(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     answer_id: uuid.UUID = Field(foreign_key="pipeline_answers.id", index=True, ondelete="CASCADE")
-    milvus_id: int
+    # O auto_id do Milvus usa os 64 bits inteiros.
+    milvus_id: int = Field(sa_column=Column(BigInteger, nullable=False))
     chunk_index: int
     score_denso: float | None = Field(default=None)
     score_esparso: float | None = Field(default=None)
     score_final: float
-    posicao_final: int
+    etapa: EtapaChunk = Field(sa_column=Column(coluna_enum(EtapaChunk, 16), nullable=False))
+    posicao: int
+    # So no contexto final: ancora, vizinho, complemento ou busca.
+    origem: str | None = Field(default=None, max_length=16)
     texto: str
+
+
+class RagasScore(SQLModel, table=True):
+    """Notas do RAGAS para uma resposta. Calculadas sob demanda, fora do fluxo do avaliador."""
+
+    __tablename__ = "ragas_scores"
+
+    answer_id: uuid.UUID = Field(
+        foreign_key="pipeline_answers.id", primary_key=True, ondelete="CASCADE"
+    )
+    fidelidade: float | None = Field(default=None)
+    relevancia_resposta: float | None = Field(default=None)
+    precisao_contexto: float | None = Field(default=None)
+    media: float | None = Field(default=None)
+    modelo: str = Field(max_length=64)
+    duracao_ms: int = Field(default=0)
+    erro: str | None = Field(default=None, max_length=2000)
+    criado_em: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False),
+    )

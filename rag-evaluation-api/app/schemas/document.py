@@ -20,6 +20,9 @@ class DocumentoResumo(BaseModel):
     descricao: str
     icone: str
     status: StatusDocumento
+    paginas: int | None
+    tabelas: int | None
+    imagens: int | None
     criado_em: datetime
 
 

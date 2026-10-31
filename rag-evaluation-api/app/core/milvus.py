@@ -67,11 +67,23 @@ def _montar_schema(cliente: MilvusClient):
 
 def _montar_indices(cliente: MilvusClient):
     indices = cliente.prepare_index_params()
-    indices.add_index(field_name=CAMPO_DENSO, index_type="AUTOINDEX", metric_type="COSINE")
+    # FLAT: o filtro por documento descarta mais de 90% dos vetores, faixa em que a documentacao do
+    # Milvus indica busca exata. Sem aproximacao, o indice nao entra como variavel do estudo.
+    indices.add_index(field_name=CAMPO_DENSO, index_type="FLAT", metric_type="COSINE")
     indices.add_index(
         field_name=CAMPO_ESPARSO, index_type="SPARSE_INVERTED_INDEX", metric_type="BM25"
     )
     return indices
+
+
+def garantir_collection(cliente: MilvusClient, nome: str) -> None:
+    """Cria a collection de um pipeline novo com o mesmo schema e indice das demais."""
+    if not cliente.has_collection(nome):
+        cliente.create_collection(
+            collection_name=nome,
+            schema=_montar_schema(cliente),
+            index_params=_montar_indices(cliente),
+        )
 
 
 def criar_collections(cliente: MilvusClient) -> list[str]:

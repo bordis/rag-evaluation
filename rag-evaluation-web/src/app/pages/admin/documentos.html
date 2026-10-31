@@ -1,0 +1,112 @@
+<h1 class="adm-titulo font-display">Documentos</h1>
+
+@if (erro(); as mensagem) {
+  <p class="adm-erro" role="alert">{{ mensagem }}</p>
+}
+
+<form class="adm-form" (submit)="enviar($event)">
+  <h2 class="adm-subtitulo">Enviar PDF digital</h2>
+  <label>
+    Arquivo
+    <input name="arquivo" type="file" accept="application/pdf,.pdf" required />
+  </label>
+  <label>
+    Título
+    <input name="titulo" required minlength="2" />
+  </label>
+  <label>
+    Identificador (slug)
+    <input name="slug" required pattern="[a-z0-9][a-z0-9\-]*" placeholder="plano-diretor" />
+  </label>
+  <label>
+    Área
+    <input name="area" required minlength="2" />
+  </label>
+  <label>
+    Descrição
+    <input name="descricao" />
+  </label>
+  <button class="adm-btn adm-btn--primario" type="submit" [disabled]="enviando()">
+    @if (enviando()) {
+      Enviando…
+    } @else {
+      Enviar
+    }
+  </button>
+</form>
+
+<table class="adm-tabela">
+  <thead>
+    <tr>
+      <th>Título</th>
+      <th>Slug</th>
+      <th>Status</th>
+      <th>Páginas</th>
+      <th>Tabelas</th>
+      <th>Imagens</th>
+      <th>Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    @for (documento of documentos(); track documento.id) {
+      <tr>
+        <td>{{ documento.titulo }}</td>
+        <td>{{ documento.slug }}</td>
+        <td>
+          <span
+            class="adm-selo"
+            [class.adm-selo--ok]="documento.status === 'pronto'"
+            [class.adm-selo--erro]="documento.status === 'erro_parcial'"
+          >
+            {{ documento.status }}
+          </span>
+        </td>
+        <td>{{ documento.paginas ?? '—' }}</td>
+        <td>{{ documento.tabelas ?? '—' }}</td>
+        <td>{{ documento.imagens ?? '—' }}</td>
+        <td class="adm-acoes">
+          <button class="adm-btn" type="button" (click)="verIngestoes(documento)">
+            Exibir detalhes
+          </button>
+          <button class="adm-btn" type="button" (click)="excluir(documento)">Excluir</button>
+        </td>
+      </tr>
+      @if (aberto() === documento.id) {
+        <tr>
+          <td colspan="7">
+            <table class="adm-tabela adm-tabela--interna">
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  <th>Status</th>
+                  <th>Chunks</th>
+                  <th>Tokens</th>
+                  <th>Parsing (ms)</th>
+                  <th>Total (ms)</th>
+                  <th>Erro</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of ingestoes(); track item.pipeline_codigo) {
+                  <tr>
+                    <td>{{ item.pipeline_codigo }}</td>
+                    <td>{{ item.status }}</td>
+                    <td>{{ item.total_chunks }}</td>
+                    <td>{{ item.tokens_embedding }}</td>
+                    <td>{{ item.duracao_parsing_ms }}</td>
+                    <td>{{ item.duracao_total_ms }}</td>
+                    <td>{{ item.erro }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      }
+    } @empty {
+      <tr>
+        <td colspan="7">Nenhum documento enviado.</td>
+      </tr>
+    }
+  </tbody>
+</table>

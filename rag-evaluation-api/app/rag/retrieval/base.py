@@ -23,6 +23,8 @@ class Candidato:
     # Chunks trazidos pela janela deslizante nao foram recuperados por merito proprio; herdam o
     # score da ancora. A marca distingue os dois casos na analise.
     vizinho: bool = False
+    # Como entrou no contexto final: busca, ancora, vizinho ou complemento.
+    origem: str | None = None
 
 
 @dataclass(frozen=True)

@@ -11,7 +11,22 @@
     </svg>
     <span class="brand__text">Avaliação RAG</span>
   </a>
-  <span class="topbar__tag">Protótipo · conteúdo ilustrativo</span>
+
+  <nav class="menu" aria-label="Menu principal">
+    <div class="menu__grupo" role="group" aria-labelledby="menu-avaliador">
+      <span id="menu-avaliador" class="menu__rotulo">Avaliador</span>
+      <a routerLink="/" routerLinkActive="ativo" [routerLinkActiveOptions]="{ exact: true }">
+        Início
+      </a>
+      <a routerLink="/documentos" routerLinkActive="ativo">Documentos</a>
+    </div>
+    <div class="menu__grupo" role="group" aria-labelledby="menu-admin">
+      <span id="menu-admin" class="menu__rotulo">Admin</span>
+      <a routerLink="/admin/estudos" routerLinkActive="ativo">Estudos</a>
+      <a routerLink="/admin/documentos" routerLinkActive="ativo">Documentos</a>
+      <a routerLink="/admin/pipelines" routerLinkActive="ativo">Pipelines</a>
+    </div>
+  </nav>
 </header>
 
 <main class="content">

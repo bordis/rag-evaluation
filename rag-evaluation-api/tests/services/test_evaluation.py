@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from app.models.document import Document
 from app.models.evaluation import EvaluationSession, PipelineAnswer, QuestionRound
 from app.models.pipeline import Pipeline
+from app.models.study import Study
 from app.models.telemetry import AnswerStageMetric, RetrievedChunk
 from app.seed import semear_pipelines
 from app.services.evaluation import (
@@ -21,7 +22,10 @@ from tests.fakes import PipelineFalso, dependencias_falsas
 @pytest.fixture(name="cenario")
 def cenario_fixture(sessao: Session):
     semear_pipelines(sessao)
-    avaliador = EvaluationSession()
+    estudo = Study(nome="Coleta")
+    sessao.add(estudo)
+    sessao.commit()
+    avaliador = EvaluationSession(study_id=estudo.id, termo_versao="v1")
     documento = Document(
         slug="lgpd",
         titulo="LGPD",
@@ -102,7 +106,7 @@ async def test_rodada_grava_metricas_e_chunks_de_cada_resposta(sessao, cenario):
     assert len(metricas) == 8  # 2 etapas x 4 pipelines
     assert {metrica.ordem for metrica in metricas} == {1, 2}
     assert len(chunks) == 8
-    assert {chunk.posicao_final for chunk in chunks} == {1, 2}
+    assert {chunk.posicao for chunk in chunks} == {1, 2}
 
 
 async def test_falha_de_um_unico_pipeline_invalida_a_rodada_inteira(sessao, cenario):

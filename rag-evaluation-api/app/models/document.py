@@ -35,6 +35,10 @@ class Document(SQLModel, table=True):
     mime_type: str = Field(max_length=120)
     tamanho_bytes: int
     sha256: str = Field(max_length=64, index=True)
+    # Contados pelo Docling, para a tabela descritiva do acervo.
+    paginas: int | None = Field(default=None)
+    tabelas: int | None = Field(default=None)
+    imagens: int | None = Field(default=None)
     status: StatusDocumento = Field(
         default=StatusDocumento.PROCESSANDO,
         sa_column=Column(

@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.models.pipeline import ParserType, Pipeline
 
-FLAGS_RETRIEVAL = ("query_rewriting", "reranking", "hybrid_search", "sliding_window")
+FLAGS_RETRIEVAL = ("hyde", "reranking", "hybrid_search", "sliding_window")
 
 CODIGOS_DE_CONTROLE = ("pipeline-1", "pipeline-2")
 
@@ -17,11 +17,13 @@ CODIGOS_DE_CONTROLE = ("pipeline-1", "pipeline-2")
 def _config(avancado: bool) -> dict:
     settings = get_settings()
     return {
-        "query_rewriting": avancado,
+        "hyde": avancado,
         "reranking": avancado,
         "hybrid_search": avancado,
         "sliding_window": {"ativo": avancado, "tamanho": settings.sliding_window_size},
         "top_k": settings.rag_search_limit,
+        "ancoras": settings.rag_ancoras,
+        "candidatos": settings.rerank_candidates,
     }
 
 
@@ -52,7 +54,7 @@ def _definicoes() -> list[dict]:
         {
             "codigo": "pipeline-3",
             "nome": "Raw + retrieval avancado",
-            "descricao": "Leitura raw com query rewriting, re-ranking, hybrid search e janela.",
+            "descricao": "Leitura raw com HyDE, busca hibrida, reordenacao e vizinhos.",
             "parser": ParserType.RAW,
             "collection_name": collections["pipeline-3"],
             "config": _config(avancado=True),
@@ -60,7 +62,7 @@ def _definicoes() -> list[dict]:
         {
             "codigo": "pipeline-4",
             "nome": "Docling + retrieval avancado",
-            "descricao": "Docling com query rewriting, re-ranking, hybrid search e janela.",
+            "descricao": "Docling com HyDE, busca hibrida, reordenacao e vizinhos.",
             "parser": ParserType.DOCLING,
             "collection_name": collections["pipeline-4"],
             "config": _config(avancado=True),
