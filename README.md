@@ -37,12 +37,12 @@ rótulos A/B/C/D de novo, então a posição também não é pista.
 | Pipelines 3 e 4 | 20 candidatos → reordenação → 5 âncoras + vizinhos (±1); se faltar, os próximos do ranking completam 15 |
 | HyDE | média dos vetores do parágrafo hipotético e da pergunta; o BM25 usa só a pergunta |
 | Fusão híbrida | `RRFRanker` (k = 60), padrão do Milvus; BM25 com k1 = 1,2 e b = 0,75 |
-| Reordenador | `BAAI/bge-reranker-v2-m3`, local, revisão fixa no compose, recebendo a pergunta original |
+| Reordenador | `bge-reranker-v2-m3`, em serviço próprio no formato `/v1/rerank`, recebendo a pergunta original |
 | Segmentação | 256 tokens (`cl100k_base`) em frases inteiras, sem sobreposição, igual nos dois parsers |
 | Índice denso | `FLAT` com cosseno: busca exata, sem parâmetros |
-| Docling | `pypdfium2`, tabelas `accurate`, sem OCR, descrição de imagens com `gpt-4.1-mini` (área mínima 5%) |
-| Geração | `gpt-4.1-mini`, temperatura 0,3, até 1024 tokens |
-| Embedding | `text-embedding-3-small` (1536) |
+| Docling | `pypdfium2`, tabelas `accurate`, sem OCR, descrição de imagens com `DOCLING_IMAGEM_MODELO` (área mínima 5%) |
+| Geração | `CHAT_MODEL`, temperatura 0,3, até 1024 tokens |
+| Embedding | `EMBEDDING_MODEL` para os trechos e `EMBEDDING_MODEL_QUERY` para a pergunta, com `EMBEDDING_DIMENSIONS` dimensões |
 | Juiz RAGAS | `RAGAS_LLM_MODEL`, sempre diferente do modelo de geração |
 
 ## Fluxo do avaliador
@@ -75,7 +75,7 @@ powershell -ExecutionPolicy Bypass -File .\subir.ps1
 O script abre o Docker Desktop se precisar, sobe os containers, espera cada serviço responder, inicia a API e o front em janelas próprias
 e abre `http://localhost:4200/admin`. Use `-SemNavegador` para não abrir o navegador.
 
-- **Primeira vez:** instala o que faltar e baixa o reordenador (2,2 GB), o que pode levar vários minutos.
+- **Primeira vez:** instala o que faltar e baixa as imagens do Docker, o que pode levar vários minutos.
   Para instalar as dependências da API, ele precisa do `uv`.
 - **Rodar de novo:** o que já está no ar é mantido, então é seguro repetir.
 - **Para parar:** feche as janelas `RAG - API` e `RAG - Web` e rode `docker compose stop` em
@@ -90,8 +90,7 @@ e abre `http://localhost:4200/admin`. Use `-SemNavegador` para não abrir o nave
 | **Python 3.12 ou 3.13** e [`uv`](https://docs.astral.sh/uv/) | `pip install uv` resolve, se não tiver. O `uv` baixa o Python 3.12 fixado no projeto. |
 | **Node.js 20+** e npm | Para o front-end Angular. |
 | **Docker + Compose** | Sobe PostgreSQL 17 (porta 5432), Milvus, etcd, MinIO e docling-serve. |
-| **Chave da API da OpenAI** | Embeddings, HyDE, geração, descrição de imagens e RAGAS. As chamadas são cobradas. |
-| **Memória e disco** | O reordenador baixa 2,2 GB na primeira subida e usa cerca de 2,7 GB de RAM. O Docker precisa de pelo menos 8 GB. |
+| **Serviços de modelo** | Chat, embeddings, reordenador e juiz do RAGAS, todos por HTTP. O chat, os embeddings e o juiz falam o formato da OpenAI; o reordenador, o `/v1/rerank`. Podem ser serviços internos. |
 
 ### 1. Banco de dados
 
@@ -108,22 +107,22 @@ semeadura dos 4 pipelines e a criação das collections do Milvus.
 ### 2. Variáveis de ambiente da API
 
 Toda a configuração fica em um único arquivo, `rag-evaluation-api/.env`, lido pela API e pelo
-`docker compose`. Ele não é versionado porque guarda a sua chave da OpenAI. Em um clone novo, crie o
-arquivo com o conteúdo abaixo e preencha `CHAT_API_KEY`:
+`docker compose`. Ele não é versionado porque guarda as chaves dos serviços. Em um clone novo, crie o
+arquivo com o conteúdo abaixo e preencha os endereços, os modelos e as chaves do seu ambiente:
 
 ```dotenv
-# OpenAI: chat (a mesma chave também é usada nos embeddings e no RAGAS)
+# Chat, no formato da OpenAI (a mesma chave também é enviada aos embeddings)
 CHAT_API_KEY=
-CHAT_MODEL=gpt-4.1-mini
-CHAT_BASE_URL=https://api.openai.com/v1
+CHAT_MODEL=
+CHAT_BASE_URL=https://seu-servico-de-chat/v1
 CHAT_TEMPERATURE=0.3
 CHAT_MAX_TOKENS=1024
 
-# OpenAI: embeddings
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_MODEL_QUERY=text-embedding-3-small
-EMBEDDING_URL=https://api.openai.com/v1
-EMBEDDING_DIMENSIONS=1536
+# Embeddings, no formato da OpenAI
+EMBEDDING_MODEL=
+EMBEDDING_MODEL_QUERY=
+EMBEDDING_URL=https://seu-servico-de-embeddings/v1
+EMBEDDING_DIMENSIONS=2048
 
 # PostgreSQL (container rag-postgres)
 DB_NAME=rag-evaluation
@@ -156,16 +155,16 @@ DOCLING_PDF_BACKEND=pypdfium2
 DOCLING_TABLE_MODE=accurate
 DOCLING_DESCREVER_IMAGENS=true
 DOCLING_IMAGEM_AREA_MINIMA=0.05
-DOCLING_IMAGEM_MODELO=gpt-4.1-mini
-# Só com antivírus que inspeciona HTTPS (veja Problemas comuns)
-DOCLING_CA_BUNDLE=
+DOCLING_IMAGEM_MODELO=
 
-# Reordenador local
-RERANKER_URL=http://localhost:8081
-RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+# Reordenador (endpoint completo; a chave vai como Bearer)
+RERANKER_URL=https://seu-reordenador/v1/rerank
+RERANKER_KEY=
 
-# RAGAS
-RAGAS_LLM_MODEL=gpt-4.1
+# RAGAS: o juiz roda em serviço próprio (sem RAGAS_LLM_KEY, vale a chave do chat)
+RAGAS_LLM_MODEL=
+RAGAS_LLM_URL=https://seu-servico-do-juiz/v1
+RAGAS_LLM_KEY=
 
 # RAG e limites do estudo
 RAG_SEARCH_LIMIT=15
@@ -187,11 +186,11 @@ mantenha-as no arquivo para deixar a configuração do estudo explícita.
 
 | Variável | Para que serve |
 | --- | --- |
-| `CHAT_API_KEY` | Chave da OpenAI. As chamadas são cobradas. |
+| `CHAT_API_KEY` | Chave do serviço de chat, enviada também ao de embeddings. |
 | `CHAT_MODEL` | Modelo de geração. **Não troque por um modelo de raciocínio**: eles rejeitam `temperature` e gastam reasoning tokens, contaminando a telemetria. |
-| `CHAT_BASE_URL` / `CHAT_TEMPERATURE` / `CHAT_MAX_TOKENS` | Endpoint e parâmetros da geração. |
-| `EMBEDDING_MODEL` / `EMBEDDING_MODEL_QUERY` | Modelos de embedding de documentos e de consultas. |
-| `EMBEDDING_URL` / `EMBEDDING_DIMENSIONS` | Endpoint e dimensão dos embeddings. A dimensão precisa casar com o schema do Milvus. |
+| `CHAT_BASE_URL` / `CHAT_TEMPERATURE` / `CHAT_MAX_TOKENS` | Endpoint (terminando em `/v1`) e parâmetros da geração. O Docling chama este mesmo endpoint para descrever imagens, então ele precisa ser alcançável a partir do docling-serve. |
+| `EMBEDDING_MODEL` / `EMBEDDING_MODEL_QUERY` | Modelo usado para embutir os trechos na ingestão e modelo usado para embutir a pergunta. Em modelos assimétricos (como o `nv-embedqa`, com sufixos `-passage` e `-query`) os dois nomes diferem. |
+| `EMBEDDING_URL` / `EMBEDDING_DIMENSIONS` | Endpoint (terminando em `/v1`) e dimensão dos embeddings. A dimensão precisa casar com o schema do Milvus: mudar exige remover as collections e reingerir. |
 | `DB_URL` / `DB_NAME` / `DB_USERNAME` / `DB_PASSWORD` | Conexão do PostgreSQL. O compose usa as três últimas para criar o banco, apenas na primeira subida; trocá-las depois não altera um banco que já existe. |
 | `MILVUS_HOST` / `MILVUS_PORT` / `MILVUS_USERNAME` / `MILVUS_PASSWORD` / `MILVUS_DATABASE_NAME` | Conexão do Milvus. |
 | `MILVUS_COLLECTION_NAME_1` a `MILVUS_COLLECTION_NAME_4` | Collection de cada um dos 4 pipelines. |
@@ -199,12 +198,11 @@ mantenha-as no arquivo para deixar a configuração do estudo explícita.
 | `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | Credenciais do MinIO. Precisam ser iguais às do `docker-compose.yml`, que o Milvus também usa. |
 | `DOCLING_URL` / `DOCLING_TIMEOUT_SECONDS` | Endereço e timeout do docling-serve. |
 | `DOCLING_DO_OCR` | Mantenha `false`: os documentos são PDFs digitais, e o OCR tornaria o tempo de ingestão incomparável ao do parser raw. |
-| `RAGAS_LLM_MODEL` | Modelo juiz do RAGAS, diferente do modelo de geração para evitar autopromoção. |
+| `RAGAS_LLM_MODEL` / `RAGAS_LLM_URL` / `RAGAS_LLM_KEY` | Modelo juiz do RAGAS, o endpoint dele (terminando em `/v1`) e a chave. O juiz é diferente do modelo de geração para evitar autopromoção. Sem `RAGAS_LLM_KEY`, vale `CHAT_API_KEY`. |
 | `RAG_SEARCH_LIMIT` / `RAG_ANCORAS` | Chunks entregues ao LLM e âncoras dos pipelines 3 e 4, na semeadura. |
-| `RERANKER_URL` / `RERANKER_MODEL` | Endereço do container `rag-reranker` e nome gravado na telemetria. O modelo em si é definido no compose. |
+| `RERANKER_URL` / `RERANKER_KEY` | Endpoint completo do reordenador (`.../v1/rerank`) e a chave, enviada como `Authorization: Bearer`. O nome do modelo e os tokens gravados na telemetria vêm da resposta do serviço. |
 | `DOCLING_PDF_BACKEND` / `DOCLING_TABLE_MODE` | Backend de leitura do PDF e modo de extração de tabelas. Afetam o parser, um dos fatores do estudo: não altere depois de ingerir os documentos. |
 | `DOCLING_DESCREVER_IMAGENS` / `DOCLING_IMAGEM_AREA_MINIMA` / `DOCLING_IMAGEM_MODELO` | Se as imagens são descritas, a área mínima (fração da página) para descrever e o modelo usado. Também afetam o parser. |
-| `DOCLING_CA_BUNDLE` | Caminho, dentro do container, do bundle de certificados. |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | Chunking em tokens, idêntico nos 4 pipelines. Mudar exige reingerir o acervo. |
 | `RERANK_CANDIDATES` / `SLIDING_WINDOW_SIZE` | Candidatos antes da reordenação e vizinhos de cada lado da âncora. |
 | `PIPELINE_TIMEOUT_SECONDS` | Timeout de cada pipeline em uma rodada. |
@@ -346,14 +344,14 @@ uv sync                          # instala/atualiza dependências
 docker compose up -d             # Milvus, etcd, MinIO e docling-serve
 uv run fastapi dev               # dev server (migrações + seed no startup)
 uv run pytest                    # suíte unitária e de contrato
-uv run pytest -m integration     # exige o compose no ar e gasta OpenAI de verdade
+uv run pytest -m integration     # exige a infraestrutura no ar e chama os modelos de verdade
 uv run ruff check . --fix        # lint
 uv run ruff format .             # formatação
 uv run alembic revision --autogenerate -m "..."   # nova migração
 ```
 
 Os testes de contrato usam o banco `rag-evaluation-test` (a fixture recria as tabelas a cada
-execução). Os marcados como `integration` ficam **fora** da suíte padrão porque custam dinheiro.
+execução). Os marcados como `integration` ficam **fora** da suíte padrão porque dependem dos serviços externos.
 
 ## Front-end (`rag-evaluation-web/`)
 
@@ -373,17 +371,17 @@ npx prettier --write .           # formatação
 | API não sobe: erro de validação em `chat_api_key` | `CHAT_API_KEY` vazia no `.env`. |
 | `/api/health` com `milvus: false` | O Milvus ainda está subindo (~90s) ou o compose não está no ar. |
 | Documento parado em `erro_parcial` | Veja `/documents/{id}/ingestions`. Se o erro cita o Docling, confira `docker compose ps` — sem ele, pipelines 2 e 4 falham. |
-| O reordenador demora a responder ao subir | Ele leva cerca de 2 minutos para carregar. O estudo só abre com ele no ar (`docker logs rag-reranker`). |
+| Estudo não abre: "O reordenador não está no ar" | A API consulta `/health` na raiz do host de `RERANKER_URL`. Confira o endereço e se o serviço responde. Um 401 na pergunta indica `RERANKER_KEY` errada. |
 | Front mostra "Não foi possível falar com o servidor" | API fora do ar, `apiBaseUrl` errado no `environment.ts`, ou a origem do front fora de `CORS_ORIGINS`. |
 | Nenhum documento na tela de seleção | Nenhum documento está `pronto`; o front só lista `?status=pronto`. |
 | Pergunta responde **502** | Algum pipeline falhou ou estourou `PIPELINE_TIMEOUT_SECONDS`. A rodada inteira é invalidada de propósito — escolher entre 3 respostas produziria um dado que não agrega com os demais. |
 | Pergunta responde **409** | Há rodada pendente de escolha, o documento não está `pronto`, o limite de `MAX_PERGUNTAS` foi atingido ou o estudo foi encerrado. |
-| Documento em `erro_parcial`: "O VLM não descreveu N imagens" | Veja `docker logs rag-docling`. Com `CERTIFICATE_VERIFY_FAILED`, o antivírus inspeciona HTTPS: junte a raiz dele ao bundle do `certifi` em `rag-evaluation-api/volumes/certs/ca-bundle.pem`, defina `DOCLING_CA_BUNDLE=/certs/ca-bundle.pem` e rode `docker compose up -d docling`. |
+| Documento em `erro_parcial`: "O VLM não descreveu N imagens" | Veja os logs do docling-serve. Quem chama o modelo de visão é ele, não a API: `CHAT_BASE_URL` precisa ser alcançável de lá, e `DOCLING_IMAGEM_MODELO` precisa aceitar imagens. |
 | Índice ou tamanho de chunk mudou | As collections só são criadas se não existirem: é preciso removê-las e reingerir o acervo. |
 
 > **Custo:** cada pergunta dispara os 4 pipelines, e cada um faz embedding da query mais uma
-> geração — os pipelines 3 e 4 ainda somam HyDE e a reordenação local. A coleta consome créditos
-> reais da OpenAI, e cada PDF com imagens gasta chamadas de visão em dois pipelines.
+> geração — os pipelines 3 e 4 ainda somam HyDE e a reordenação. O estudo mede esse custo em
+> tempo e tokens, não em dinheiro; cada PDF com imagens gasta chamadas de visão em dois pipelines.
 >
 > **Tempo:** em CPU, a reordenação é o gargalo: quase 1 s por candidato de 256 tokens, em fila. Avaliadores
 > simultâneos somam a espera. O tempo da etapa inclui a fila; para medir o custo da reordenação, meça-a isolada.
