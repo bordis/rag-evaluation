@@ -81,8 +81,8 @@ export class EvaluationStore {
   }
 
   /**
-   * Cria a sessão a partir do aceite do termo, na tela de boas-vindas.
-   * TODO: quando houver login, ligar a sessão ao avaliador; hoje, fechar a aba cria outro.
+   * Cria a sessão a partir do aceite do termo, na tela de boas-vindas. O servidor guarda uma por
+   * login e por estudo: se este login já aceitou, a mesma sessão volta.
    */
   async iniciarSessao(termoVersao: string): Promise<string | null> {
     const atual = this._sessionId();
@@ -91,31 +91,69 @@ export class EvaluationStore {
     }
     return this.executar(async () => {
       const id = await this.api.criarSessao(termoVersao);
-      this._sessionId.set(id);
-      sessionStorage.setItem(CHAVE_SESSAO, id);
+      this.guardarSessao(id);
       return id;
     });
   }
 
-  /** Uma sessão de um estudo já encerrado não serve mais: o novo estudo começa zerado. */
+  /**
+   * Há sessão no estudo aberto, isto é, o termo já foi aceito? Uma sessão de um estudo encerrado
+   * não serve mais. Sem sessão no navegador, pergunta ao servidor: o aceite é do login, não da
+   * aba, então quem aceitou em outro navegador (ou fechou a aba) não vê o termo de novo.
+   */
   async sessaoValida(): Promise<boolean> {
     const sessionId = this._sessionId();
-    if (!sessionId) {
-      return false;
+    if (sessionId) {
+      try {
+        const progresso = await this.api.obterProgresso(sessionId);
+        if (progresso.estudoAberto) {
+          return true;
+        }
+      } catch (erro) {
+        // Só o servidor dizer que a sessão não existe a descarta; rede fora do ar não.
+        if ((erro as { status?: number }).status !== 404) {
+          return true;
+        }
+      }
+      this.descartarSessao();
     }
+    return this.recuperarSessao();
+  }
+
+  /**
+   * Pedido de aceite: quem tenta ir aos documentos sem ter aceitado o termo é levado de volta a
+   * ele, e a tela de boas-vindas rola até o termo e o destaca. A tela consome o pedido.
+   */
+  private pedidos = 0;
+  private readonly _aceitePedido = signal(0);
+  /** Pedido pendente (0 = nenhum). Cada pedido tem um número novo, para destacar de novo. */
+  readonly aceitePedido = this._aceitePedido.asReadonly();
+
+  pedirAceite(): void {
+    this.pedidos += 1;
+    this._aceitePedido.set(this.pedidos);
+  }
+
+  consumirPedidoDeAceite(): void {
+    this._aceitePedido.set(0);
+  }
+
+  private async recuperarSessao(): Promise<boolean> {
     try {
-      const progresso = await this.api.obterProgresso(sessionId);
-      if (progresso.estudoAberto) {
+      const id = await this.api.obterMinhaSessao();
+      if (id) {
+        this.guardarSessao(id);
         return true;
       }
-    } catch (erro) {
-      // Só o servidor dizer que a sessão não existe a descarta; rede fora do ar não.
-      if ((erro as { status?: number }).status !== 404) {
-        return true;
-      }
+    } catch {
+      // Sem resposta do servidor, não há como saber: segue como não aceito.
     }
-    this.descartarSessao();
     return false;
+  }
+
+  private guardarSessao(id: string): void {
+    this._sessionId.set(id);
+    sessionStorage.setItem(CHAVE_SESSAO, id);
   }
 
   private descartarSessao(): void {

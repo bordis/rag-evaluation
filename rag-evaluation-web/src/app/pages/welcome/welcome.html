@@ -24,19 +24,41 @@
   @if (carregando()) {
     <p class="hero__note" role="status">Verificando se há um estudo aberto…</p>
   } @else if (erro(); as mensagem) {
-    <p class="aviso" role="alert">{{ mensagem }}</p>
+    <p #alvo class="aviso" role="alert">{{ mensagem }}</p>
   } @else if (!estudo()) {
-    <p class="aviso" role="status">
+    <p #alvo class="aviso" role="status">
       Não há estudo aberto no momento. Volte quando o pesquisador iniciar a coleta.
     </p>
+  } @else if (jaAceitou()) {
+    <section class="aceito" aria-labelledby="aceito-titulo">
+      <h2 id="aceito-titulo" class="aceito__titulo">Você já aceitou o termo de participação.</h2>
+      <details class="aceito__termo">
+        <summary>Rever o termo</summary>
+        @for (paragrafo of termo; track $index) {
+          <p class="termo__texto">{{ paragrafo }}</p>
+        }
+      </details>
+    </section>
+
+    <a class="cta" routerLink="/documentos">Continuar avaliação</a>
   } @else {
-    <section class="termo" aria-labelledby="termo-titulo">
+    <section
+      #alvo
+      class="termo"
+      [class.termo--exigido]="aceiteExigido()"
+      aria-labelledby="termo-titulo"
+    >
       <h2 id="termo-titulo" class="termo__titulo">Termo de participação</h2>
+      @if (aceiteExigido()) {
+        <p class="termo__pedido" role="alert">
+          Para acessar os documentos, leia e aceite o termo de participação abaixo.
+        </p>
+      }
       @for (paragrafo of termo; track $index) {
         <p class="termo__texto">{{ paragrafo }}</p>
       }
       <label class="termo__aceite">
-        <input type="checkbox" [checked]="aceite()" (change)="onAceite($event)" />
+        <input #caixaAceite type="checkbox" [checked]="aceite()" (change)="onAceite($event)" />
         Li as informações acima e concordo em participar.
       </label>
     </section>

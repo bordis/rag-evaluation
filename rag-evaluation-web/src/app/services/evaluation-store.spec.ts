@@ -167,4 +167,36 @@ describe('EvaluationStore', () => {
     expect(store.sessionId()).toBeNull();
     expect(sessionStorage.getItem('rag-evaluation.session-id')).toBeNull();
   });
+
+  it('recovers the session this login already has on the server (term accepted elsewhere)', async () => {
+    // Arrange
+    sessionStorage.clear();
+    const outraApi = new ApiRagFake();
+    outraApi.sessaoDoLogin = 'sessao-do-login';
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [{ provide: ApiRag, useValue: outraApi }] });
+    const outroStore = TestBed.inject(EvaluationStore);
+
+    // Act
+    const valida = await outroStore.sessaoValida();
+
+    // Assert
+    expect(valida).toBe(true);
+    expect(outroStore.sessionId()).toBe('sessao-do-login');
+    expect(sessionStorage.getItem('rag-evaluation.session-id')).toBe('sessao-do-login');
+  });
+
+  it('is not valid when this login never accepted the term', async () => {
+    // Arrange
+    sessionStorage.clear();
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: ApiRag, useValue: new ApiRagFake() }],
+    });
+    const outroStore = TestBed.inject(EvaluationStore);
+
+    // Act / Assert
+    expect(await outroStore.sessaoValida()).toBe(false);
+    expect(outroStore.sessionId()).toBeNull();
+  });
 });

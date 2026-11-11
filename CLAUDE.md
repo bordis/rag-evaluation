@@ -26,6 +26,10 @@ The results page is split in tabs kept in `?aba=`; every analysis sits in `compo
   avoid a pointless round trip; a 409 from the API is the real answer.
 - **Only study-open sessions work.** A closed study freezes its data; `sessaoValida()` discards a stored session
   from a closed study, and a route guard sends the evaluator back to consent.
+- **Consent is per login and per study, kept on the server** (one session per Keycloak `sub` per study). With no
+  stored id, `sessaoValida()` recovers it from `GET /sessions/me`, so an evaluator who accepted once never sees the
+  term again in that study. The guard on `/documentos` doesn't navigate without consent: it calls `pedirAceite()`
+  and redirects home, where `Welcome` scrolls to the term, highlights it and focuses the checkbox.
 - **Round timing is measured in the browser** (`services/cronometro-rodada.ts`) and survives F5. Generation wait and
   hidden-tab time are separate fields, not subtracted.
 - **Each question is a step, one per screen, with no way back** (`components/progresso-etapas/` only shows progress).

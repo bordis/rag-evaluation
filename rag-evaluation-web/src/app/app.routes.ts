@@ -5,12 +5,18 @@ import { exigeRole, ROLE_ADMIN, ROLES_DO_ESTUDO } from './auth/autenticacao';
 import { EvaluationStore } from './services/evaluation-store';
 
 /**
- * Sem sessão válida no estudo aberto, o avaliador volta ao início para aceitar o termo.
+ * Sem sessão válida no estudo aberto (termo não aceito), o avaliador não navega: volta ao início,
+ * que rola até o termo e o destaca. Vale para o menu "Documentos" e para a URL digitada.
  * O login vem antes de tudo (`login-required`); `exigeRole` confere a role do cliente.
  */
 const exigeSessao: CanActivateFn = async () => {
-  const valida = await inject(EvaluationStore).sessaoValida();
-  return valida || inject(Router).parseUrl('/');
+  const store = inject(EvaluationStore);
+  const router = inject(Router);
+  if (await store.sessaoValida()) {
+    return true;
+  }
+  store.pedirAceite();
+  return router.parseUrl('/');
 };
 
 export const routes: Routes = [

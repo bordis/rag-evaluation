@@ -57,7 +57,16 @@ export class ApiRagFake {
   async criarSessao(termoVersao: string): Promise<string> {
     this.checar();
     this.termoRecebido = termoVersao;
+    this.sessaoDoLogin = 'sessao-de-teste';
     return 'sessao-de-teste';
+  }
+
+  /** Sessão que o servidor já tem para este login no estudo aberto (aceite feito antes). */
+  sessaoDoLogin: string | null = null;
+
+  async obterMinhaSessao(): Promise<string | null> {
+    this.checar();
+    return this.estudoAberto ? this.sessaoDoLogin : null;
   }
 
   async listarDocumentos(): Promise<RagDocument[]> {

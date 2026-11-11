@@ -89,6 +89,17 @@ export class ApiRag {
     return criada.id;
   }
 
+  /**
+   * A sessão deste login no estudo aberto, ou `null` se ele ainda não aceitou o termo. É o que
+   * faz o aceite valer em qualquer navegador: o servidor guarda uma sessão por login e por estudo.
+   */
+  async obterMinhaSessao(): Promise<string | null> {
+    const minha = await this.executar(
+      this.http.get<{ id: string } | null>(`${this.base}/sessions/me`),
+    );
+    return minha?.id ?? null;
+  }
+
   /** Só documentos `pronto`: os demais têm ingestão incompleta em pelo menos um pipeline. */
   async listarDocumentos(): Promise<RagDocument[]> {
     const documentos = await this.executar(
