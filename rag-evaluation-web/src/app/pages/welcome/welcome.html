@@ -1,12 +1,13 @@
 <section class="hero">
-  <span class="hero__eyebrow">Avaliação de respostas · Pesquisa de Mestrado</span>
+  <span class="hero__eyebrow">SmartGen · Avaliação de respostas geradas por IA</span>
 
   <h1 class="hero__title font-display">Ajude-nos a descobrir<br />qual resposta é a melhor.</h1>
 
   <p class="hero__lead">
-    Seja bem-vindo(a), e muito obrigado por participar! Sua avaliação é essencial para medir a
-    qualidade de diferentes configurações de um sistema de perguntas e respostas sobre documentos.
-    Não há resposta certa ou errada — o que importa é a sua percepção.
+    Seja bem-vindo(a), e muito obrigado por participar! Esta avaliação faz parte do SmartGen e
+    serve para melhorá-lo: com a sua opinião, descobrimos quais respostas geradas por inteligência
+    artificial são mais úteis e corretas. Não há resposta certa ou errada — o que importa é a sua
+    percepção.
   </p>
 
   <ol class="steps" role="list">
@@ -22,12 +23,12 @@
   </ol>
 
   @if (carregando()) {
-    <p class="hero__note" role="status">Verificando se há um estudo aberto…</p>
+    <p class="hero__note" role="status">Verificando se a avaliação está aberta…</p>
   } @else if (erro(); as mensagem) {
     <p #alvo class="aviso" role="alert">{{ mensagem }}</p>
   } @else if (!estudo()) {
     <p #alvo class="aviso" role="status">
-      Não há estudo aberto no momento. Volte quando o pesquisador iniciar a coleta.
+      A avaliação não está aberta no momento. Volte mais tarde.
     </p>
   } @else if (jaAceitou()) {
     <section class="aceito" aria-labelledby="aceito-titulo">

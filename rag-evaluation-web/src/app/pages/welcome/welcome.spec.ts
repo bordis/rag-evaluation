@@ -65,7 +65,7 @@ describe('Welcome', () => {
 
     // Assert
     expect(compiled.querySelector('.cta')).toBeNull();
-    expect(compiled.querySelector('.aviso')?.textContent).toContain('Não há estudo aberto');
+    expect(compiled.querySelector('.aviso')?.textContent).toContain('A avaliação não está aberta');
   });
 
   it('hides the term when this login already accepted it in the open study', async () => {

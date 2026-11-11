@@ -9,8 +9,8 @@ import Keycloak from 'keycloak-js';
     <section class="sem-acesso">
       <h1 class="sem-acesso__titulo font-display">Sem acesso a esta área</h1>
       <p class="sem-acesso__texto">
-        Sua conta entrou, mas não tem permissão para esta parte do estudo. Se você foi convidado a
-        avaliar, peça ao pesquisador para liberar o seu usuário.
+        Sua conta entrou, mas não tem permissão para esta área. Se você foi convidado a avaliar
+        as respostas do SmartGen, peça à equipe responsável para liberar o seu usuário.
       </p>
       <button type="button" class="sem-acesso__sair" (click)="sair()">
         Entrar com outra conta

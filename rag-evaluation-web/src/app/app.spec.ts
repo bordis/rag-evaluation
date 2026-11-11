@@ -31,7 +31,7 @@ describe('App', () => {
   it('renders the brand and the account initials', async () => {
     const { compiled } = await montar([ROLE_AVALIADOR]);
 
-    expect(compiled.querySelector('.brand__text')?.textContent).toContain('Avaliação RAG');
+    expect(compiled.querySelector('.brand__text')?.textContent).toContain('Avaliação de respostas');
     expect(compiled.querySelector('.avatar')?.textContent?.trim()).toBe('MS');
   });
 

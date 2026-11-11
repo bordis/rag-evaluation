@@ -147,6 +147,6 @@ describe('ApiRag', () => {
       .error(new ProgressEvent('error'), { status: 0 });
 
     // Assert
-    await expect(promessa).rejects.toThrowError(/API está no ar/);
+    await expect(promessa).rejects.toThrowError(/Tente novamente em instantes/);
   });
 });

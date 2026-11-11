@@ -207,7 +207,7 @@ function traduzirErro(erro: unknown): ApiError {
   }
   // status 0 = a requisição nem chegou ao servidor (API fora do ar ou CORS bloqueando).
   if (erro.status === 0) {
-    return new ApiError('Não foi possível falar com o servidor. Verifique se a API está no ar.', 0);
+    return new ApiError('Não foi possível falar com o servidor. Tente novamente em instantes.', 0);
   }
   const detalhe = (erro.error as { detail?: unknown } | null)?.detail;
   if (typeof detalhe === 'string') {

@@ -25,7 +25,7 @@ export const routes: Routes = [
     canActivate: [exigeRole],
     data: { roles: ROLES_DO_ESTUDO },
     loadComponent: () => import('./pages/welcome/welcome').then((m) => m.Welcome),
-    title: 'Avaliação de Pipeline RAG',
+    title: 'Avaliação de respostas · SmartGen',
   },
   {
     path: 'documentos',
@@ -33,14 +33,14 @@ export const routes: Routes = [
     data: { roles: ROLES_DO_ESTUDO },
     loadComponent: () =>
       import('./pages/document-selection/document-selection').then((m) => m.DocumentSelection),
-    title: 'Escolha um documento · Avaliação RAG',
+    title: 'Escolha um documento · SmartGen',
   },
   {
     path: 'avaliacao/:docId',
     canActivate: [exigeRole, exigeSessao],
     data: { roles: ROLES_DO_ESTUDO },
     loadComponent: () => import('./pages/evaluation/evaluation').then((m) => m.Evaluation),
-    title: 'Avaliação · RAG',
+    title: 'Avaliação de respostas · SmartGen',
   },
   {
     path: 'admin',
@@ -85,7 +85,7 @@ export const routes: Routes = [
   {
     path: 'sem-acesso',
     loadComponent: () => import('./pages/sem-acesso/sem-acesso').then((m) => m.SemAcesso),
-    title: 'Sem acesso · Avaliação RAG',
+    title: 'Sem acesso · SmartGen',
   },
   { path: '**', redirectTo: '' },
 ];
