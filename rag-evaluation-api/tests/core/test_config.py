@@ -51,6 +51,11 @@ def test_divide_origens_de_cors_separadas_por_virgula():
     assert settings.cors_origin_list == ["http://localhost:4200", "http://localhost:4300"]
 
 
+def test_saude_do_reordenador_fica_na_raiz_do_servico():
+    settings = _settings(reranker_url="https://reordenador.exemplo/v1/rerank")
+    assert settings.reranker_health_url == "https://reordenador.exemplo/health"
+
+
 def test_falta_de_chave_da_openai_impede_a_subida(monkeypatch):
     # O conftest define CHAT_API_KEY no ambiente; sem remover, o Settings a encontraria e
     # o teste passaria a nao verificar nada.

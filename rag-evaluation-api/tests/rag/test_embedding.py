@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
-from app.rag.embedding import TAMANHO_DO_LOTE, embutir_textos
+from app.core.config import get_settings
+from app.rag.embedding import TAMANHO_DO_LOTE, embutir_consulta, embutir_textos
 
 
 class ClienteFalso:
@@ -63,5 +64,14 @@ def test_resposta_fora_de_ordem_e_reordenada_pelo_index():
 def test_a_dimensao_configurada_e_enviada():
     cliente = ClienteFalso()
     embutir_textos(["ab"], cliente=cliente)
-    assert cliente.chamadas[0]["dimensions"] == 1536
-    assert cliente.chamadas[0]["model"] == "text-embedding-3-small"
+    assert cliente.chamadas[0]["dimensions"] == get_settings().embedding_dimensions
+    assert cliente.chamadas[0]["model"] == get_settings().embedding_model
+
+
+def test_a_consulta_usa_o_modelo_de_consulta(monkeypatch):
+    monkeypatch.setattr(get_settings(), "embedding_model_query", "modelo-de-consulta")
+    cliente = ClienteFalso()
+
+    embutir_consulta(["ab"], cliente=cliente)
+
+    assert cliente.chamadas[0]["model"] == "modelo-de-consulta"

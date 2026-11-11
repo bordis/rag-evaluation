@@ -19,7 +19,6 @@ from app.rag.parsing.base import ErroDeParsing, ResultadoParsing
 CAMINHO_CONVERSAO = "/v1/convert/file/async"
 STATUS_ACEITOS = ("success", "partial_success")
 INTERVALO_POLL_SEGUNDOS = 3
-URL_DESCRICAO_IMAGENS = "https://api.openai.com/v1/chat/completions"
 PROMPT_DESCRICAO_IMAGENS = (
     "Descreva esta imagem em português e até 2 frases, destacando os elementos visuais mais "
     "relevantes. Seja objetivo e conciso."
@@ -41,7 +40,9 @@ def _opcoes() -> dict:
         opcoes["picture_description_area_threshold"] = str(settings.docling_imagem_area_minima)
         opcoes["picture_description_api"] = json.dumps(
             {
-                "url": URL_DESCRICAO_IMAGENS,
+                # Quem chama o modelo e o servidor do Docling, nao esta API: a URL precisa ser
+                # alcancavel de la.
+                "url": f"{settings.chat_base_url.rstrip('/')}/chat/completions",
                 "headers": {"Authorization": f"Bearer {settings.chat_api_key}"},
                 "params": {"model": settings.docling_imagem_modelo},
                 "prompt": PROMPT_DESCRICAO_IMAGENS,
@@ -133,7 +134,7 @@ def extrair_texto_docling(
         if ausentes:
             raise ErroDeParsing(
                 f"O VLM não descreveu {len(ausentes)} imagens ({', '.join(ausentes)}). "
-                "Veja os logs do container rag-docling; com antivírus, confira DOCLING_CA_BUNDLE."
+                "Veja os logs do docling-serve: ele precisa alcançar o modelo em CHAT_BASE_URL."
             )
     return ResultadoParsing(
         texto=texto.strip(),

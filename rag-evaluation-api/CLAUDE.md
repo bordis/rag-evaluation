@@ -34,7 +34,7 @@ identical across all four on purpose; varying them would confound the variables.
   collections carry the sparse field even where hybrid search is off.
 - **Analyzer is Portuguese-specific** (`asciifolding` + stemmer + stopwords). There is no `{"type": "portuguese"}`
   shortcut; without the explicit form, "proteção" and "protecao" would be distinct terms.
-- **`gpt-4.1-mini`, not a reasoning model.** Reasoning models reject custom `temperature` and spend reasoning
+- **The generation model must not be a reasoning model.** Reasoning models reject custom `temperature` and spend reasoning
   tokens, which would contaminate the per-pipeline token telemetry the study measures.
 - **The uploaded PDF lives in MinIO** (`core/armazenamento.py`, bucket `documentos`, separate from Milvus's `a-bucket`)
   so evaluators can consult it; the browser only gets it through `GET /api/documents/{id}/arquivo`. It is the same file
@@ -57,18 +57,22 @@ identical across all four on purpose; varying them would confound the variables.
 - **`app/__init__.py` injects `truststore`:** the antivirus intercepts HTTPS intermittently, and with `certifi` OpenAI
   calls fail at random (`APIConnectionError`), which invalidates rounds. The Windows store already trusts its root.
 - **Docling reports `success` when the VLM fails.** `_imagens_sem_descricao` turns a large picture with no description
-  into an ingestion error; otherwise factor A would silently change. The compose needs
-  `DOCLING_SERVE_ENABLE_REMOTE_SERVICES` and, behind an HTTPS-inspecting antivirus, `DOCLING_CA_BUNDLE`.
+  into an ingestion error; otherwise factor A would silently change. The docling-serve needs
+  `DOCLING_SERVE_ENABLE_REMOTE_SERVICES` and must reach `CHAT_BASE_URL`: it is the one that calls the vision model.
 - **Every pipeline delivers the same 15 chunks.** Advanced arms: 20 candidates → re-rank → 5 anchors + neighbours, then
   `_completar_contexto` fills up with the next ranked candidates. Documents with fewer chunks deliver what exists.
 - **HyDE only touches the dense leg.** The vector is the mean of hypothetical + question; BM25 and the re-ranker see the question.
-- **The re-ranker has no fallback.** `BAAI/bge-reranker-v2-m3` runs locally in the `rag-reranker` TEI container, called
-  over HTTP so the API stays free of torch. Falling back to search order would mix two treatments under one pipeline,
-  so its failure fails the round, and a study won't open while it is down.
-- **Re-rank latency is contention-sensitive on CPU** (~1 s per 256-token candidate, queued). `duracao_ms`
-  includes queue time and TEI's `inferencia_ms`/`fila_ms` headers don't add up to it, so measure the re-rank cost
-  in isolation. TEI's default batch size exhausted Docker's
-  memory during warm-up and took Milvus down: keep `--max-batch-tokens` low and `mem_limit` set.
+- **The re-ranker has no fallback.** It is an external service speaking `/v1/rerank` (Jina/Cohere shape, what vLLM
+  serves); `RERANKER_URL` is the full endpoint and `RERANKER_KEY` goes as Bearer. Falling back to search order would
+  mix two treatments under one pipeline, so its failure fails the round, and a study won't open while it is down.
+  Its `/health` is read from the host root, not under the endpoint path.
+- **The re-rank metric takes model and tokens from the response,** like the chat does. `duracao_ms` includes queue
+  time on the shared service, so measure the re-rank cost in isolation.
+- **Cost is time and tokens, never money.** The models are on-premises; there is no price table and no `custo_usd`.
+  Pareto dominance in `custo_beneficio` uses win rate, mean tokens and p50 latency.
+- **Passages and questions use different embedding model names** (`EMBEDDING_MODEL` / `EMBEDDING_MODEL_QUERY`,
+  `embutir_textos` / `embutir_consulta`). On asymmetric models, embedding the question as a passage silently hurts retrieval.
+- **Unit tests read the real `.env`,** so assert against `get_settings()`, never against a default model name.
 - **`buscar_parcelas` repeats the dense and sparse searches** outside the retrieval stopwatch, only to record each
   stage: `hybrid_search` doesn't return the RRF parts.
 - **`FLAT` index:** the per-document filter discards over 90% of vectors. `criar_collections` never alters an existing
@@ -84,8 +88,8 @@ identical across all four on purpose; varying them would confound the variables.
   final cause is the researcher's, in `answer_annotations`.
 - **`tempo_total_ms` includes writing the question.** Reading time is total minus `tempo_pergunta_ms`, generation and
   hidden time (`tempo_ativo_ms`); without that subtraction fatigue is confounded with typing.
-- **Cost is frozen when recorded** (`answer_stage_metrics.custo_usd`), and `studies.config_snapshot` and
-  `document_ingestions.config_snapshot` keep what the answer's own snapshot lacks: models, prompts, prices, chunking.
+- **`studies.config_snapshot` and `document_ingestions.config_snapshot`** keep what the answer's own snapshot
+  lacks: models, prompts, chunking.
 - **`rodadas_simultaneas` isolates re-rank latency:** quote `ms_p50_sem_concorrencia`, not the contended p50.
 - **The study RAGAS batch commits per answer** and `reservar_calculo` blocks a second batch while one runs (in-memory:
   the API is a single process). That is what lets `GET /api/admin/studies/{id}/ragas` report progress.
@@ -136,7 +140,8 @@ identical across all four on purpose; varying them would confound the variables.
 - `uv sync` — install/refresh dependencies (uses `.venv/`).
 - `docker compose up -d` — PostgreSQL 17 (port 5432, named volume `postgres-data`), etcd, MinIO, Milvus Standalone,
   docling-serve. Milvus takes ~90s to report healthy. RAGAS is a library, not a service: `services/ragas_rodadas.py`
-  scores stored rounds on the researcher's request and costs real money; the round flow never calls it.
+  scores stored rounds on the researcher's request, with the judge at `RAGAS_LLM_URL`; the round flow never calls it.
+  The compose is the local alternative; the current `.env` points at on-premises services instead.
 - Python is pinned to 3.12 (`.python-version`) and capped below 3.14: `scikit-network`, required by `ragas`, has no
   3.14 wheel. `langchain-community<0.4` is required too, because `ragas` 0.4.3 imports a module removed in later versions.
 - `uv run fastapi dev` — dev server at `http://127.0.0.1:8000`, Swagger at `/docs`.
@@ -147,8 +152,8 @@ identical across all four on purpose; varying them would confound the variables.
 - `uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head`. Migrations also run
   automatically in the app lifespan.
 - `uv run ruff check . --fix` and `uv run ruff format .`. `alembic/versions/` is excluded — it's generated code.
-- Integration tests that hit OpenAI cost real money (a few cents per run of
-  `tests/api/test_ingestao_ponta_a_ponta.py`). They are excluded from the default suite.
+- Integration tests call the real model services (`tests/api/test_ingestao_ponta_a_ponta.py`). They are excluded
+  from the default suite.
 
 ## Conventions
 

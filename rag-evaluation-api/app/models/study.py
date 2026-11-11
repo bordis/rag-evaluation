@@ -36,7 +36,7 @@ class Study(SQLModel, table=True):
         default=StatusEstudo.ABERTO,
         sa_column=Column(coluna_enum(StatusEstudo, 16), nullable=False),
     )
-    # Modelos, prompts, precos e pipelines na abertura: os modelos ainda vao mudar ate a coleta.
+    # Modelos, prompts e pipelines na abertura: os modelos ainda vao mudar ate a coleta.
     config_snapshot: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
     iniciado_em: datetime | None = Field(
         default=None,

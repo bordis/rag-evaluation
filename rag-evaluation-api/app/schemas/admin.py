@@ -91,7 +91,6 @@ class MetricaDetalhe(BaseModel):
     tokens_completion: int | None
     tokens_total: int | None
     modelo: str | None
-    custo_usd: float | None
     detalhes: dict
 
 

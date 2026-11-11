@@ -55,8 +55,6 @@ class AnswerStageMetric(SQLModel, table=True):
     tokens_completion: int | None = Field(default=None)
     tokens_total: int | None = Field(default=None)
     modelo: str | None = Field(default=None, max_length=64)
-    # Calculado ao gravar: mudar a tabela de precos depois nao reescreve o custo da coleta.
-    custo_usd: float | None = Field(default=None)
     detalhes: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
 
 

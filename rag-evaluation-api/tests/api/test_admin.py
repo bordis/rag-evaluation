@@ -99,7 +99,7 @@ def test_nao_abre_com_o_reordenador_fora_do_ar(cliente, monkeypatch):
     resposta = cliente.post("/api/studies", json={"nome": "Piloto"})
 
     assert resposta.status_code == 409
-    assert "rag-reranker" in resposta.json()["detail"]
+    assert "reordenador" in resposta.json()["detail"]
 
 
 def test_novo_estudo_comeca_zerado(cliente, documento):
@@ -249,7 +249,7 @@ def test_detalhe_revela_pipeline_escolha_e_chunks_por_etapa(cliente, documento):
         (1, 0.9, "trecho um"),
         (2, 0.5, "trecho dois"),
     ]
-    assert respostas[0]["metricas"][1]["custo_usd"] is not None
+    assert "custo_usd" not in respostas[0]["metricas"][1]
 
 
 def test_avaliacao_inexistente_responde_404(cliente):
@@ -369,7 +369,7 @@ def test_estudo_congela_modelos_prompts_e_pipelines(cliente, sessao):
     registro = sessao.get(Study, uuid.UUID(estudo["id"]))
 
     assert registro.config_snapshot["geracao"]["prompt"]
-    assert registro.config_snapshot["precos_por_milhao_de_tokens"]
+    assert "precos_por_milhao_de_tokens" not in registro.config_snapshot
     assert set(registro.config_snapshot["pipelines"]) == {
         f"pipeline-{numero}" for numero in (1, 2, 3, 4)
     }

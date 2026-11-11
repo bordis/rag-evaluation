@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,14 +10,15 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    # OpenAI — chat
+    # Chat: qualquer servico compativel com a API da OpenAI (a URL inclui o /v1)
     chat_model: str = "gpt-4.1-mini"
     chat_base_url: str = "https://api.openai.com/v1"
     chat_temperature: float = 0.3
     chat_api_key: str
     chat_max_tokens: int = 1024
 
-    # OpenAI — embeddings
+    # Embeddings, tambem no formato da OpenAI. Modelos assimetricos usam um nome para indexar
+    # trechos e outro para a consulta; nos simetricos os dois sao iguais.
     embedding_model: str = "text-embedding-3-small"
     embedding_model_query: str = "text-embedding-3-small"
     embedding_url: str = "https://api.openai.com/v1"
@@ -58,20 +60,16 @@ class Settings(BaseSettings):
     docling_imagem_area_minima: float = 0.05
     docling_imagem_modelo: str = "gpt-4.1-mini"
 
-    # Reordenador local dos pipelines 3 e 4, servido pelo container rag-reranker
-    reranker_url: str = "http://localhost:8081"
-    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    # Reordenador dos pipelines 3 e 4. A URL e o endpoint completo, no formato /v1/rerank
+    # (Jina/Cohere, o que o vLLM serve); a chave vai como Bearer. O nome do modelo vem da resposta.
+    reranker_url: str = "http://localhost:8081/v1/rerank"
+    reranker_key: str = ""
 
-    # Precos em US$ por milhao de tokens (entrada, saida), para a analise de custo. A reordenacao
-    # roda localmente: custa tempo e CPU, nao dolares.
-    precos_modelos: dict[str, tuple[float, float]] = {
-        "gpt-4.1-mini": (0.40, 1.60),
-        "gpt-4.1": (3.00, 12.00),
-        "text-embedding-3-small": (0.02, 0.02),
-    }
-
-    # RAGAS
+    # RAGAS: o juiz roda em servico proprio, separado do modelo de geracao. Sem chave propria,
+    # vale a do chat.
     ragas_llm_model: str = "gpt-4.1"
+    ragas_llm_url: str = "https://api.openai.com/v1"
+    ragas_llm_key: str = ""
 
     # RAG
     # Chunks entregues ao LLM nos 4 pipelines (decisao 4 da ficha).
@@ -116,6 +114,13 @@ class Settings(BaseSettings):
             "pipeline-3": self.milvus_collection_name_3,
             "pipeline-4": self.milvus_collection_name_4,
         }
+
+    @computed_field
+    @property
+    def reranker_health_url(self) -> str:
+        """O /health fica na raiz do servico, nao sob o caminho do endpoint."""
+        partes = urlsplit(self.reranker_url)
+        return f"{partes.scheme}://{partes.netloc}/health"
 
     @computed_field
     @property

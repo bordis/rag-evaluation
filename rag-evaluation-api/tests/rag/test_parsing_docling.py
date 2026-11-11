@@ -3,6 +3,7 @@ import json
 import httpx
 import pytest
 
+from app.core.config import get_settings
 from app.models.pipeline import ParserType
 from app.rag.parsing import obter_parser
 from app.rag.parsing.base import ErroDeParsing
@@ -89,7 +90,10 @@ def test_envia_a_configuracao_da_dissertacao():
     assert "lgpd.pdf" in corpo
     for trecho in ("pypdfium2", "accurate", 'name="do_ocr"', "picture_description_api"):
         assert trecho in corpo
-    assert "gpt-4.1-mini" in corpo
+    settings = get_settings()
+    assert settings.docling_imagem_modelo in corpo
+    # O modelo de visao e o do proprio ambiente, nao um endereco fixo de fora.
+    assert f"{settings.chat_base_url.rstrip('/')}/chat/completions" in corpo
 
 
 def test_sem_descricao_de_imagens_nao_envia_a_api(monkeypatch):

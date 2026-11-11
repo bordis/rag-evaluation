@@ -14,7 +14,7 @@ PIPELINES_DO_DESENHO = 4
 
 def reordenador_no_ar() -> bool:
     try:
-        httpx.get(f"{get_settings().reranker_url}/health", timeout=5).raise_for_status()
+        httpx.get(get_settings().reranker_health_url, timeout=5).raise_for_status()
     except httpx.HTTPError:
         return False
     return True
@@ -33,7 +33,7 @@ def impedimento_para_abrir(sessao: Session) -> str | None:
         return f"O desenho exige {PIPELINES_DO_DESENHO} pipelines ativos; há {len(ativos)}."
     precisa_reordenar = any((pipeline.config or {}).get("reranking") for pipeline in ativos)
     if precisa_reordenar and not reordenador_no_ar():
-        return "O reordenador não está no ar: suba o container rag-reranker e aguarde ficar pronto."
+        return "O reordenador não está no ar: confira RERANKER_URL e o serviço de reordenação."
     return None
 
 
@@ -50,9 +50,10 @@ def retrato_do_ambiente(sessao: Session) -> dict:
             "prompt_hyde": INSTRUCAO_HYDE,
         },
         "embedding": settings.embedding_model,
-        "reordenador": settings.reranker_model,
+        "embedding_consulta": settings.embedding_model_query,
+        "embedding_dimensoes": settings.embedding_dimensions,
+        "reordenador": settings.reranker_url,
         "juiz_ragas": settings.ragas_llm_model,
         "limite_perguntas": settings.max_perguntas,
-        "precos_por_milhao_de_tokens": settings.precos_modelos,
         "pipelines": {pipeline.codigo: pipeline.config for pipeline in pipelines},
     }

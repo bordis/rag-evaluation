@@ -16,7 +16,6 @@ from app.services.analise import (
     comparar_metades,
     confiabilidade_split_half,
     custo_beneficio,
-    custo_usd,
     faixas_de_posicao,
     holm,
     kendall_tau,
@@ -142,13 +141,6 @@ def test_percentil_interpola():
 def test_kendall():
     assert kendall_tau([1, 2, 3, 4], [1, 2, 3, 4]) == 1
     assert kendall_tau([1, 2, 3, 4], [4, 3, 2, 1]) == -1
-
-
-def test_custo_casa_o_snapshot_com_o_preco_e_nao_inventa_sem_tokens():
-    assert custo_usd("gpt-4.1-mini-2025-04-14", 1_000_000, 0) == pytest.approx(0.40)
-    assert custo_usd("gpt-4.1-2025-04-14", 0, 1_000_000) == pytest.approx(12.0)
-    assert custo_usd("BAAI/bge-reranker-v2-m3", None, None) is None
-    assert custo_usd("modelo-desconhecido", 10, 10) is None
 
 
 def _notas(rodada: Rodada, maior: str) -> list[dict]:
@@ -379,15 +371,16 @@ def test_custo_beneficio_marca_dominados_e_incrementos():
         {"codigo": "pipeline-3", "taxa": 0.2, "ic95": None},
     ]
     custos = [
-        {"codigo": "pipeline-1", "usd_medio": 0.001, "ms_p50": 1000, "tokens_medio": 10},
-        {"codigo": "pipeline-4", "usd_medio": 0.002, "ms_p50": 2000, "tokens_medio": 20},
-        {"codigo": "pipeline-3", "usd_medio": 0.002, "ms_p50": 2000, "tokens_medio": 20},
+        {"codigo": "pipeline-1", "ms_p50": 1000, "tokens_medio": 10},
+        {"codigo": "pipeline-4", "ms_p50": 2000, "tokens_medio": 20},
+        {"codigo": "pipeline-3", "ms_p50": 2000, "tokens_medio": 20},
     ]
 
     linhas = {item["codigo"]: item for item in custo_beneficio(pipelines, custos)}
 
     assert linhas["pipeline-4"]["delta_pontos"] == pytest.approx(20)
-    assert linhas["pipeline-4"]["multiplo_usd"] == pytest.approx(2)
+    assert linhas["pipeline-4"]["multiplo_tokens"] == pytest.approx(2)
+    assert "usd_medio" not in linhas["pipeline-4"]
     assert linhas["pipeline-4"]["dominado_por"] == []
     assert linhas["pipeline-3"]["dominado_por"] == ["pipeline-1", "pipeline-4"]
 

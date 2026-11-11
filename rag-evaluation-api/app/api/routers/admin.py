@@ -30,7 +30,7 @@ from app.schemas.admin import (
     RespostaDetalhe,
     RodadaAdmin,
 )
-from app.services.analise import analisar_estudo, custo_usd, e_avancado
+from app.services.analise import analisar_estudo, e_avancado
 from app.services.ragas_rodadas import (
     calcular_em_segundo_plano,
     calcular_notas,
@@ -129,7 +129,6 @@ def _detalhar_resposta(
                 tokens_completion=item.tokens_completion,
                 tokens_total=item.tokens_total,
                 modelo=item.modelo,
-                custo_usd=custo_usd(item.modelo, item.tokens_prompt, item.tokens_completion),
                 detalhes=item.detalhes,
             )
             for item in metricas
@@ -313,7 +312,7 @@ def exportar_csv(sessao: SessionDep, study_id: uuid.UUID) -> Response:
 def calcular_ragas_do_estudo(
     sessao: SessionDep, tarefas: BackgroundTasks, study_id: uuid.UUID
 ) -> RagasDisparado:
-    """Roda em segundo plano e pula o que ja tem nota. Gasta creditos da OpenAI."""
+    """Roda em segundo plano e pula o que ja tem nota. Chama o juiz uma vez por metrica."""
     _obter_estudo(sessao, study_id)
     rodadas = rodadas_do_estudo(sessao, study_id)
     pendentes = contar_pendentes(sessao, rodadas)

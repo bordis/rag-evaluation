@@ -29,7 +29,6 @@ from statistics import fmean, median
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.core.config import get_settings
 from app.models.document import Document, DocumentIngestion
 from app.models.evaluation import (
     EvaluationSession,
@@ -103,19 +102,6 @@ class Rodada:
     truncadas: tuple[str, ...] = ()
     # Por codigo de pipeline, para ligar a rodada as anotacoes do pesquisador.
     respostas_ids: dict[str, uuid.UUID] = field(default_factory=dict)
-
-
-def custo_usd(modelo: str | None, entrada: int | None, saida: int | None) -> float | None:
-    """Sem preco ou sem tokens (reordenacao, busca), a etapa fica sem custo em vez de custo zero."""
-    if modelo is None or (entrada is None and saida is None):
-        return None
-    precos = get_settings().precos_modelos
-    # A API devolve o snapshot ("gpt-4.1-mini-2025-04-14"): vale o nome mais longo que casar.
-    casados = [nome for nome in precos if modelo.startswith(nome)]
-    if not casados:
-        return None
-    preco_entrada, preco_saida = precos[max(casados, key=len)]
-    return ((entrada or 0) * preco_entrada + (saida or 0) * preco_saida) / 1_000_000
 
 
 def wilson(sucessos: int, total: int, z: float = 1.96) -> tuple[float, float] | None:
@@ -1099,9 +1085,9 @@ def custo_beneficio(por_pipeline: list[dict], custo: list[dict]) -> list[dict]:
 
     def medidas(codigo: str) -> tuple[float, float, float] | None:
         linha = custos.get(codigo)
-        if linha is None or None in (taxas.get(codigo), linha["usd_medio"], linha["ms_p50"]):
+        if linha is None or None in (taxas.get(codigo), linha["tokens_medio"], linha["ms_p50"]):
             return None
-        return taxas[codigo], linha["usd_medio"], linha["ms_p50"]
+        return taxas[codigo], linha["tokens_medio"], linha["ms_p50"]
 
     def domina(a: str, b: str) -> bool:
         x, y = medidas(a), medidas(b)
@@ -1114,15 +1100,13 @@ def custo_beneficio(por_pipeline: list[dict], custo: list[dict]) -> list[dict]:
     for item in por_pipeline:
         codigo = item["codigo"]
         linha = custos.get(codigo)
-        if linha is None or linha["usd_medio"] is None:
+        if linha is None or linha["tokens_medio"] is None:
             continue
         saida.append(
             {
                 "codigo": codigo,
                 "taxa": item["taxa"],
                 "ic95": item["ic95"],
-                "usd_medio": linha["usd_medio"],
-                "usd_por_mil_perguntas": linha["usd_medio"] * 1000,
                 "ms_p50": linha["ms_p50"],
                 "tokens_medio": linha["tokens_medio"],
                 "delta_pontos": (
@@ -1130,9 +1114,9 @@ def custo_beneficio(por_pipeline: list[dict], custo: list[dict]) -> list[dict]:
                     if item["taxa"] is not None and taxas.get(PIPELINE_REFERENCIA) is not None
                     else None
                 ),
-                "multiplo_usd": (
-                    linha["usd_medio"] / referencia["usd_medio"]
-                    if referencia and referencia["usd_medio"]
+                "multiplo_tokens": (
+                    linha["tokens_medio"] / referencia["tokens_medio"]
+                    if referencia and referencia["tokens_medio"]
                     else None
                 ),
                 "multiplo_latencia": (
@@ -1162,20 +1146,18 @@ def analisar_custo(sessao: Session, study_id: uuid.UUID, codigos: list[str]) -> 
 
     por_etapa: dict[tuple[str, str], list[AnswerStageMetric]] = defaultdict(list)
     por_resposta: dict[tuple[str, uuid.UUID], dict] = defaultdict(
-        lambda: {"ms": 0, "tokens": 0, "usd": 0.0, "sozinha": False}
+        lambda: {"ms": 0, "tokens": 0, "sozinha": False}
     )
     for metrica, codigo, answer_id, simultaneas in linhas:
         por_etapa[(codigo, metrica.etapa.value)].append(metrica)
         acumulado = por_resposta[(codigo, answer_id)]
         acumulado["ms"] += metrica.duracao_ms
         acumulado["tokens"] += metrica.tokens_total or 0
-        acumulado["usd"] += metrica.custo_usd or 0.0
         acumulado["sozinha"] = simultaneas == 1
 
     def resumo_etapa(codigo: str, etapa: str, itens: list[AnswerStageMetric]) -> dict:
         duracoes = [item.duracao_ms for item in itens]
         tokens = [item.tokens_total for item in itens if item.tokens_total is not None]
-        custos = [item.custo_usd for item in itens if item.custo_usd is not None]
         return {
             "codigo": codigo,
             "etapa": etapa,
@@ -1184,7 +1166,6 @@ def analisar_custo(sessao: Session, study_id: uuid.UUID, codigos: list[str]) -> 
             "ms_p50": percentil(duracoes, 0.5),
             "ms_p95": percentil(duracoes, 0.95),
             "tokens_medio": fmean(tokens) if tokens else None,
-            "usd_medio": fmean(custos) if custos else None,
         }
 
     def resumo_pipeline(codigo: str) -> dict:
@@ -1201,8 +1182,7 @@ def analisar_custo(sessao: Session, study_id: uuid.UUID, codigos: list[str]) -> 
                 [item["ms"] for item in itens if item["sozinha"]], 0.5
             ),
             "tokens_medio": fmean(item["tokens"] for item in itens) if itens else None,
-            "usd_medio": fmean(item["usd"] for item in itens) if itens else None,
-            "usd_total": sum(item["usd"] for item in itens),
+            "tokens_total": sum(item["tokens"] for item in itens),
         }
 
     ingestoes = sessao.exec(

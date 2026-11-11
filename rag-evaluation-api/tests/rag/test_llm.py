@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from app.core.config import get_settings
 from app.rag.llm import conversar
 
 
@@ -48,15 +49,15 @@ def test_modelo_registrado_e_o_snapshot_devolvido_pela_api():
 def test_usa_max_completion_tokens_e_nao_o_parametro_depreciado():
     cliente = ClienteFalso()
     conversar(MENSAGENS, cliente=cliente)
-    assert cliente.chamadas[0]["max_completion_tokens"] == 1024
+    assert cliente.chamadas[0]["max_completion_tokens"] == get_settings().chat_max_tokens
     assert "max_tokens" not in cliente.chamadas[0]
 
 
 def test_envia_modelo_e_temperatura_da_configuracao():
     cliente = ClienteFalso()
     conversar(MENSAGENS, cliente=cliente)
-    assert cliente.chamadas[0]["model"] == "gpt-4.1-mini"
-    assert cliente.chamadas[0]["temperature"] == 0.3
+    assert cliente.chamadas[0]["model"] == get_settings().chat_model
+    assert cliente.chamadas[0]["temperature"] == get_settings().chat_temperature
 
 
 def test_formato_json_so_e_pedido_quando_solicitado():

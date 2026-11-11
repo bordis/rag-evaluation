@@ -6,7 +6,8 @@ from app.models.telemetry import EtapaPipeline
 from app.rag.retrieval.base import Candidato
 from app.rag.retrieval.window import expandir_janela
 
-DOCUMENTO = uuid.uuid4()
+# Fixo: um UUID sorteado as vezes contem "-1" e derruba o teste do indice negativo.
+DOCUMENTO = uuid.UUID("00000000-0000-4000-8000-000000000000")
 
 
 class ClienteFalso:

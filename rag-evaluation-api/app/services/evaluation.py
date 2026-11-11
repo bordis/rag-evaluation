@@ -24,7 +24,6 @@ from app.models.evaluation import PipelineAnswer, QuestionRound, RoundFailure
 from app.models.pipeline import Pipeline
 from app.models.telemetry import AnswerStageMetric, EtapaChunk, EtapaPipeline, RetrievedChunk
 from app.rag.pipeline import RespostaDePipeline, executar_pipeline
-from app.services.analise import custo_usd
 
 ROTULOS = ("A", "B", "C", "D")
 
@@ -209,9 +208,6 @@ def _persistir(
                     tokens_completion=metrica.tokens_completion,
                     tokens_total=metrica.tokens_total,
                     modelo=metrica.modelo,
-                    custo_usd=custo_usd(
-                        metrica.modelo, metrica.tokens_prompt, metrica.tokens_completion
-                    ),
                     detalhes=metrica.detalhes,
                 )
             )

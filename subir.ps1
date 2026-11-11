@@ -104,10 +104,8 @@ if ($saidaCompose -ne 0) {
 }
 $ErrorActionPreference = 'Stop'
 
-# Limites folgados: na primeira vez, o reordenador ainda baixa 2,2 GB antes de carregar.
 Aguardar-Url 'Milvus' 'http://localhost:9091/healthz' 300 'Veja: docker logs rag-milvus'
 Aguardar-Url 'Docling' 'http://localhost:5001/health' 300 'Veja: docker logs rag-docling'
-Aguardar-Url 'Reordenador' 'http://localhost:8081/health' 900 'Veja: docker logs rag-reranker'
 
 Write-Host '3/4 Subindo a API' -ForegroundColor Cyan
 if (Testar-Url $urlApi) {

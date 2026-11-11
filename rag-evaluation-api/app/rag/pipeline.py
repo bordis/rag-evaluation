@@ -16,7 +16,7 @@ from app.core.config import get_settings
 from app.core.milvus import construir_cliente
 from app.models.pipeline import Pipeline
 from app.models.telemetry import EtapaChunk, EtapaPipeline
-from app.rag.embedding import embutir_textos
+from app.rag.embedding import embutir_consulta
 from app.rag.generation import gerar_resposta
 from app.rag.retrieval.base import Candidato, MetricaEtapa
 from app.rag.retrieval.hyde import gerar_documento_hipotetico
@@ -40,7 +40,7 @@ class DependenciasDeConsulta:
     """Pontos de injecao. Com falsos aqui, o fluxo inteiro roda sem OpenAI nem Milvus."""
 
     gerar_hipotetico: Callable = field(default=gerar_documento_hipotetico)
-    embutir: Callable = field(default=embutir_textos)
+    embutir: Callable = field(default=embutir_consulta)
     buscar: Callable = field(default=buscar)
     buscar_parcelas: Callable = field(default=buscar_parcelas)
     reordenar: Callable = field(default=reordenar)
@@ -113,7 +113,7 @@ def executar_pipeline(
             duracao_ms=relogio.ms,
             tokens_prompt=embutido.tokens,
             tokens_total=embutido.tokens,
-            modelo=settings.embedding_model,
+            modelo=settings.embedding_model_query,
             detalhes={"textos": len(textos)},
         )
     )

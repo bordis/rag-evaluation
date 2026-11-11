@@ -48,7 +48,10 @@ def criar_metricas() -> MetricasRagas:
     settings = get_settings()
     llm = llm_factory(
         settings.ragas_llm_model,
-        client=AsyncOpenAI(api_key=settings.chat_api_key, base_url=settings.chat_base_url),
+        client=AsyncOpenAI(
+            api_key=settings.ragas_llm_key or settings.chat_api_key,
+            base_url=settings.ragas_llm_url,
+        ),
         temperature=TEMPERATURA_JUIZ,
         max_tokens=MAX_TOKENS_JUIZ,
     )

@@ -41,7 +41,7 @@ def verificar_reordenador() -> ComponenteSaude:
     import httpx
 
     try:
-        resposta = httpx.get(f"{get_settings().reranker_url}/health", timeout=5)
+        resposta = httpx.get(get_settings().reranker_health_url, timeout=5)
         resposta.raise_for_status()
         return ComponenteSaude(nome="reordenador", disponivel=True)
     except Exception as erro:

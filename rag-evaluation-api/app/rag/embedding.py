@@ -1,4 +1,4 @@
-"""Embeddings via OpenAI, com lotes e contagem de tokens.
+"""Embeddings por API no formato da OpenAI, com lotes e contagem de tokens.
 
 A contagem de tokens nao e detalhe operacional: e um dos dois numeros que a dissertacao compara
 entre os pipelines. Por isso ela sobe junto com os vetores em vez de ficar num log.
@@ -32,7 +32,10 @@ def cliente_embedding() -> OpenAI:
     )
 
 
-def embutir_textos(textos: list[str], *, cliente: OpenAI | None = None) -> ResultadoEmbedding:
+def embutir_textos(
+    textos: list[str], *, cliente: OpenAI | None = None, modelo: str | None = None
+) -> ResultadoEmbedding:
+    """Embute trechos do acervo. Para a pergunta, use `embutir_consulta`."""
     if not textos:
         return ResultadoEmbedding(vetores=[], tokens=0)
 
@@ -44,7 +47,7 @@ def embutir_textos(textos: list[str], *, cliente: OpenAI | None = None) -> Resul
     for inicio in range(0, len(textos), TAMANHO_DO_LOTE):
         lote = textos[inicio : inicio + TAMANHO_DO_LOTE]
         resposta = cliente.embeddings.create(
-            model=settings.embedding_model,
+            model=modelo or settings.embedding_model,
             input=lote,
             dimensions=settings.embedding_dimensions,
         )
@@ -55,3 +58,12 @@ def embutir_textos(textos: list[str], *, cliente: OpenAI | None = None) -> Resul
         tokens += resposta.usage.prompt_tokens
 
     return ResultadoEmbedding(vetores=vetores, tokens=tokens)
+
+
+def embutir_consulta(textos: list[str], *, cliente: OpenAI | None = None) -> ResultadoEmbedding:
+    """Embute a pergunta (e o texto do HyDE) com o modelo de consulta.
+
+    Em modelos assimetricos, como o nv-embedqa, pergunta e trecho recebem prefixos diferentes;
+    embutir a pergunta como trecho derruba a recuperacao sem acusar erro.
+    """
+    return embutir_textos(textos, cliente=cliente, modelo=get_settings().embedding_model_query)

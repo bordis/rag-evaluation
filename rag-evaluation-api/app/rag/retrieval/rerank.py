@@ -1,8 +1,11 @@
-"""Reordenacao dos candidatos por cross-encoder local. Ligada so nos pipelines 3 e 4.
+"""Reordenacao dos candidatos por cross-encoder, num servico a parte. Ligada so nos pipelines 3 e 4.
 
 O modelo recebe a pergunta original, nao o documento hipotetico: a relevancia se julga contra o que
 o avaliador de fato perguntou. Sem fallback para a ordem da busca: uma rodada reordenada e outra nao
 misturariam dois tratamentos sob o mesmo pipeline, entao a falha derruba a rodada.
+
+O servico fala o formato /v1/rerank (Jina/Cohere, o que o vLLM serve): recebe `documents` e devolve
+`results` com `relevance_score`, alem do modelo e dos tokens consumidos.
 """
 
 from dataclasses import replace
@@ -15,9 +18,8 @@ from app.rag.retrieval.base import Candidato, MetricaEtapa
 from app.telemetry.recorder import Cronometro
 
 
-def _tempo_do_cabecalho(resposta: httpx.Response, nome: str) -> int | None:
-    valor = resposta.headers.get(nome)
-    return int(float(valor)) if valor else None
+def _cabecalhos(chave: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {chave}"} if chave else {}
 
 
 def reordenar(
@@ -25,28 +27,21 @@ def reordenar(
 ) -> tuple[list[Candidato], MetricaEtapa]:
     """Devolve todos em nova ordem, com o score do modelo; quem corta e o orquestrador."""
     settings = get_settings()
-    detalhes: dict = {"candidatos": len(candidatos), "provedor": "tei"}
+    detalhes: dict = {"candidatos": len(candidatos)}
     if not candidatos:
-        return [], MetricaEtapa(
-            etapa=EtapaPipeline.RERANKING,
-            duracao_ms=0,
-            modelo=settings.reranker_model,
-            detalhes=detalhes,
-        )
+        return [], MetricaEtapa(etapa=EtapaPipeline.RERANKING, duracao_ms=0, detalhes=detalhes)
 
     proprio = cliente is None
     if cliente is None:
-        cliente = httpx.Client(
-            base_url=settings.reranker_url, timeout=settings.pipeline_timeout_seconds
-        )
+        cliente = httpx.Client(timeout=settings.pipeline_timeout_seconds)
     try:
         with Cronometro() as relogio:
             resposta = cliente.post(
-                "/rerank",
+                settings.reranker_url,
+                headers=_cabecalhos(settings.reranker_key),
                 json={
                     "query": pergunta,
-                    "texts": [candidato.texto for candidato in candidatos],
-                    "raw_scores": False,
+                    "documents": [candidato.texto for candidato in candidatos],
                 },
             )
             resposta.raise_for_status()
@@ -54,17 +49,19 @@ def reordenar(
         if proprio:
             cliente.close()
 
-    ordenados = [
-        replace(candidatos[item["index"]], score_final=float(item["score"]))
-        for item in resposta.json()
-    ]
-    # Os pipelines 3 e 4 disputam o mesmo servico, e `duracao_ms` inclui a fila. Os cabecalhos do
-    # TEI sao por lote e nao somam a duracao: servem de indicio, nao de custo exato.
-    detalhes["inferencia_ms"] = _tempo_do_cabecalho(resposta, "x-inference-time")
-    detalhes["fila_ms"] = _tempo_do_cabecalho(resposta, "x-queue-time")
-    return ordenados, MetricaEtapa(
+    corpo = resposta.json()
+    ordenados = sorted(corpo["results"], key=lambda item: item["relevance_score"], reverse=True)
+    # O modelo e os tokens vem da resposta, como no chat: e o que o servico de fato usou. Os
+    # pipelines 3 e 4 disputam o mesmo servico, entao `duracao_ms` inclui a espera na fila.
+    tokens = (corpo.get("usage") or {}).get("total_tokens")
+    return [
+        replace(candidatos[item["index"]], score_final=float(item["relevance_score"]))
+        for item in ordenados
+    ], MetricaEtapa(
         etapa=EtapaPipeline.RERANKING,
         duracao_ms=relogio.ms,
-        modelo=settings.reranker_model,
+        tokens_prompt=tokens,
+        tokens_total=tokens,
+        modelo=corpo.get("model"),
         detalhes=detalhes,
     )
