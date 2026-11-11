@@ -109,7 +109,6 @@
                 <th>Etapa</th>
                 <th>ms</th>
                 <th>Tokens</th>
-                <th>US$</th>
                 <th>Modelo</th>
                 <th>Detalhes</th>
               </tr>
@@ -120,9 +119,6 @@
                   <td>{{ metrica.etapa }}</td>
                   <td>{{ metrica.duracao_ms }}</td>
                   <td>{{ metrica.tokens_total ?? '—' }}</td>
-                  <td>
-                    {{ metrica.custo_usd === null ? '—' : (metrica.custo_usd | number: '1.5-5') }}
-                  </td>
                   <td>{{ metrica.modelo ?? '—' }}</td>
                   <td>
                     <code class="adm-pequeno">{{ metrica.detalhes | json }}</code>

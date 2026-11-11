@@ -167,7 +167,7 @@ export const AJUDA = {
   },
   ambiente: {
     oQueE:
-      'Modelos, temperatura, prompts, preços e configuração dos pipelines no momento em que o estudo foi aberto.',
+      'Modelos, temperatura, prompts e configuração dos pipelines no momento em que o estudo foi aberto.',
     comoLer: [
       'É a fonte para a tabela de configuração do apêndice da dissertação.',
       'Os modelos ainda vão mudar até a coleta: cite daqui o que este estudo de fato usou.',
@@ -282,14 +282,14 @@ export const AJUDA = {
   },
   custoBeneficio: {
     oQueE:
-      'Junta a preferência humana e o custo por resposta. Responde se o ganho compensa o gasto adicional.',
+      'Junta a preferência humana e o custo por resposta, medido em latência e tokens. Responde se o ganho compensa o custo adicional.',
     comoLer: [
-      'O canto superior esquerdo do gráfico é o melhor negócio: mais vitórias e menos custo.',
-      '"Dominado por": existe outro pipeline melhor ou igual em vitórias, custo e latência ao mesmo tempo.',
-      'Compare o ganho em pontos com o múltiplo de custo. +10 pontos por 2× o custo é uma decisão; +1 ponto por 2× é outra.',
+      'O canto superior esquerdo do gráfico é o melhor negócio: mais vitórias e menos espera.',
+      '"Dominado por": existe outro pipeline melhor ou igual em vitórias, tokens e latência ao mesmo tempo.',
+      'Compare o ganho em pontos com os múltiplos de latência e de tokens. +10 pontos por 2× a espera é uma decisão; +1 ponto por 2× é outra.',
     ],
     cuidado:
-      'Dominância olha só as médias e ignora os intervalos: diferenças pequenas de vitória podem ser ruído. O custo em US$ usa os preços configurados e não inclui a descrição de imagens na ingestão. A reordenação local tem US$ zero, mas custa tempo.',
+      'Dominância olha só as médias e ignora os intervalos: diferenças pequenas de vitória podem ser ruído. Os modelos rodam em serviços internos, então não há custo em dinheiro: o custo é tempo e tokens. A latência depende da carga desses serviços no momento da coleta, e os tokens da reordenação são contados pelo tokenizador do reordenador, não pelo do modelo de geração.',
     fontes:
       'Wang et al. (2024), sobre o custo das técnicas avançadas; Arslan et al. (2024), sobre o custo de API em produção.',
   },

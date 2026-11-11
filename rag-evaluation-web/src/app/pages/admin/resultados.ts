@@ -222,16 +222,16 @@ export class AdminResultados {
 
   protected readonly pontosCusto = computed<PontoDispersao[]>(() =>
     (this.dados()?.custo_beneficio ?? [])
-      .filter((item) => item.taxa !== null)
+      .filter((item) => item.taxa !== null && item.ms_p50 !== null)
       .map((item) => ({
         rotulo: this.curto(item.codigo),
-        x: item.usd_por_mil_perguntas,
+        x: item.ms_p50 as number,
         y: item.taxa as number,
         ic: item.ic95,
-        dica: `${this.pipeline(item.codigo)}: ${this.pct(item.taxa)} de vitórias, US$ ${this.usd(item.usd_por_mil_perguntas, 2)} por mil perguntas`,
+        dica: `${this.pipeline(item.codigo)}: ${this.pct(item.taxa)} de vitórias, ${this.segundos(item.ms_p50)} de latência e ${this.num(item.tokens_medio)} tokens por resposta`,
       })),
   );
-  protected readonly formatarUsd = (valor: number): string => `US$ ${this.usd(valor, 2)}`;
+  protected readonly formatarLatencia = (valor: number): string => this.segundos(valor);
 
   protected readonly etapasPorPipeline = computed(() => {
     const dados = this.dados();
@@ -320,7 +320,7 @@ export class AdminResultados {
       pergunta: 'O ganho compensa o custo?',
       veredito: melhor?.taxa === null || !melhor ? 'sem dados' : 'decisão sua',
       detalhe: melhor?.taxa
-        ? `Mais vitórias: ${this.pipeline(melhor.codigo)}, com ${this.pct(melhor.taxa)} e ${this.vezes(melhor.multiplo_usd)} o custo por resposta do pipeline 1.`
+        ? `Mais vitórias: ${this.pipeline(melhor.codigo)}, com ${this.pct(melhor.taxa)} ${this.vezes(melhor.multiplo_latencia)} a latência e ${this.vezes(melhor.multiplo_tokens)} os tokens do pipeline 1.`
         : 'Sem dados de custo ainda.',
       aba: 'custo',
     });
@@ -469,10 +469,6 @@ export class AdminResultados {
           maximumFractionDigits: casas,
           minimumFractionDigits: casas,
         });
-  }
-
-  protected usd(valor: number | null | undefined, casas = 5): string {
-    return this.num(valor, casas);
   }
 
   protected segundos(valor: number | null): string {

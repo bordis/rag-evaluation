@@ -78,7 +78,6 @@ export interface MetricaDetalhe {
   duracao_ms: number;
   tokens_total: number | null;
   modelo: string | null;
-  custo_usd: number | null;
   detalhes: Record<string, unknown>;
 }
 
@@ -267,8 +266,7 @@ export interface Estatisticas {
       ms_p95: number | null;
       ms_p50_sem_concorrencia: number | null;
       tokens_medio: number | null;
-      usd_medio: number | null;
-      usd_total: number;
+      tokens_total: number;
     }>;
     por_etapa: Array<{
       codigo: string;
@@ -278,7 +276,6 @@ export interface Estatisticas {
       ms_p50: number | null;
       ms_p95: number | null;
       tokens_medio: number | null;
-      usd_medio: number | null;
     }>;
     ingestao: Array<{
       codigo: string;
@@ -294,12 +291,10 @@ export interface Estatisticas {
     codigo: string;
     taxa: number | null;
     ic95: Intervalo | null;
-    usd_medio: number;
-    usd_por_mil_perguntas: number;
     ms_p50: number | null;
-    tokens_medio: number | null;
+    tokens_medio: number;
     delta_pontos: number | null;
-    multiplo_usd: number | null;
+    multiplo_tokens: number | null;
     multiplo_latencia: number | null;
     dominado_por: string[];
   }>;

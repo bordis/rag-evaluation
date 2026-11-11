@@ -645,7 +645,7 @@
         [ajuda]="ajuda.ambiente"
       >
         <details>
-          <summary>Ver modelos, prompts, preços e pipelines</summary>
+          <summary>Ver modelos, prompts e pipelines</summary>
           <pre class="comando">{{ stats.ambiente | json }}</pre>
         </details>
       </app-analise-cartao>
@@ -1005,9 +1005,9 @@
         @if (pontosCusto().length) {
           <app-grafico-dispersao
             [pontos]="pontosCusto()"
-            rotuloX="US$ por mil perguntas"
+            rotuloX="Latência p50 por resposta"
             [referencia]="stats.acaso"
-            [formatarX]="formatarUsd"
+            [formatarX]="formatarLatencia"
           />
           <p class="adm-pequeno">Linha horizontal: acaso (25%). Traço vertical: IC 95%.</p>
         }
@@ -1018,11 +1018,10 @@
                 <th>Pipeline</th>
                 <th>Taxa de vitória</th>
                 <th>Pontos sobre P1</th>
-                <th>US$ por mil perguntas</th>
-                <th>Custo × P1</th>
                 <th>Latência p50</th>
                 <th>Latência × P1</th>
                 <th>Tokens (média)</th>
+                <th>Tokens × P1</th>
                 <th>Dominado por</th>
               </tr>
             </thead>
@@ -1032,11 +1031,10 @@
                   <td>{{ pipeline(item.codigo) }}</td>
                   <td>{{ pct(item.taxa) }}</td>
                   <td>{{ sinal(item.delta_pontos) }}</td>
-                  <td>{{ usd(item.usd_por_mil_perguntas, 2) }}</td>
-                  <td>{{ vezes(item.multiplo_usd) }}</td>
                   <td>{{ segundos(item.ms_p50) }}</td>
                   <td>{{ vezes(item.multiplo_latencia) }}</td>
                   <td>{{ num(item.tokens_medio) }}</td>
+                  <td>{{ vezes(item.multiplo_tokens) }}</td>
                   <td>
                     @for (outro of item.dominado_por; track outro) {
                       {{ curto(outro) }}{{ $last ? '' : ', ' }}
@@ -1093,7 +1091,6 @@
                   <th>p50</th>
                   <th>p95</th>
                   <th>Tokens</th>
-                  <th>US$</th>
                 </tr>
               </thead>
               <tbody>
@@ -1105,7 +1102,6 @@
                     <td>{{ segundos(item.ms_p50) }}</td>
                     <td>{{ segundos(item.ms_p95) }}</td>
                     <td>{{ num(item.tokens_medio) }}</td>
-                    <td>{{ usd(item.usd_medio) }}</td>
                   </tr>
                 }
               </tbody>
@@ -1129,8 +1125,7 @@
                 <th>Latência p95</th>
                 <th>p50 sem concorrência</th>
                 <th>Tokens (média)</th>
-                <th>US$ (média)</th>
-                <th>US$ (total)</th>
+                <th>Tokens (total)</th>
               </tr>
             </thead>
             <tbody>
@@ -1142,8 +1137,7 @@
                   <td>{{ segundos(item.ms_p95) }}</td>
                   <td>{{ segundos(item.ms_p50_sem_concorrencia) }}</td>
                   <td>{{ num(item.tokens_medio) }}</td>
-                  <td>{{ usd(item.usd_medio) }}</td>
-                  <td>{{ usd(item.usd_total, 4) }}</td>
+                  <td>{{ num(item.tokens_total) }}</td>
                 </tr>
               }
             </tbody>
