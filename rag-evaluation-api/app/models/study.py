@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import Column, DateTime, Index, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel
 
@@ -35,6 +36,8 @@ class Study(SQLModel, table=True):
         default=StatusEstudo.ABERTO,
         sa_column=Column(coluna_enum(StatusEstudo, 16), nullable=False),
     )
+    # Modelos, prompts, precos e pipelines na abertura: os modelos ainda vao mudar ate a coleta.
+    config_snapshot: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
     iniciado_em: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False),

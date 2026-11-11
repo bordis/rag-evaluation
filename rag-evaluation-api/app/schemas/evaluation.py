@@ -52,6 +52,10 @@ class EscolhaEntrada(BaseModel):
     tempo_total_ms: int | None = Field(default=None, ge=0)
     tempo_geracao_ms: int | None = Field(default=None, ge=0)
     tempo_oculto_ms: int | None = Field(default=None, ge=0)
+    tempo_pergunta_ms: int | None = Field(default=None, ge=0)
+    respostas_vistas: int | None = Field(default=None, ge=0, le=4)
+    recarregamentos: int | None = Field(default=None, ge=0)
+    largura_tela: int | None = Field(default=None, ge=0)
 
 
 class ProgressoDocumento(BaseModel):

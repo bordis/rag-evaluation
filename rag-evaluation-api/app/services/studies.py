@@ -6,6 +6,8 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.models.pipeline import Pipeline
 from app.models.study import StatusEstudo, Study
+from app.rag.generation import INSTRUCAO_SISTEMA
+from app.rag.retrieval.hyde import INSTRUCAO as INSTRUCAO_HYDE
 
 PIPELINES_DO_DESENHO = 4
 
@@ -33,3 +35,24 @@ def impedimento_para_abrir(sessao: Session) -> str | None:
     if precisa_reordenar and not reordenador_no_ar():
         return "O reordenador não está no ar: suba o container rag-reranker e aguarde ficar pronto."
     return None
+
+
+def retrato_do_ambiente(sessao: Session) -> dict:
+    """O que a tabela de configuracao da dissertacao precisa, como estava ao abrir o estudo."""
+    settings = get_settings()
+    pipelines = sessao.exec(select(Pipeline).order_by(Pipeline.codigo)).all()  # type: ignore[arg-type]
+    return {
+        "geracao": {
+            "modelo": settings.chat_model,
+            "temperatura": settings.chat_temperature,
+            "max_tokens": settings.chat_max_tokens,
+            "prompt": INSTRUCAO_SISTEMA,
+            "prompt_hyde": INSTRUCAO_HYDE,
+        },
+        "embedding": settings.embedding_model,
+        "reordenador": settings.reranker_model,
+        "juiz_ragas": settings.ragas_llm_model,
+        "limite_perguntas": settings.max_perguntas,
+        "precos_por_milhao_de_tokens": settings.precos_modelos,
+        "pipelines": {pipeline.codigo: pipeline.config for pipeline in pipelines},
+    }

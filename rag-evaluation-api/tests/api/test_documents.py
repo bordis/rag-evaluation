@@ -1,8 +1,10 @@
+import hashlib
 import uuid
 
 import pytest
 from sqlmodel import Session, select
 
+from app.core.armazenamento import ArquivoAusente
 from app.models.document import Document, DocumentIngestion, StatusDocumento, StatusIngestao
 from app.models.pipeline import Pipeline
 from app.seed import semear_pipelines
@@ -24,6 +26,50 @@ def agendadas_fixture(monkeypatch):
         lambda *argumentos: chamadas.append(argumentos),
     )
     return chamadas
+
+
+class RespostaFalsa:
+    def __init__(self, conteudo: bytes) -> None:
+        self.conteudo = conteudo
+        self.fechada = False
+
+    def stream(self, _tamanho: int):
+        yield self.conteudo
+
+    def close(self) -> None:
+        self.fechada = True
+
+    def release_conn(self) -> None:
+        pass
+
+
+class ArmazenamentoFalso:
+    def __init__(self) -> None:
+        self.objetos: dict[str, bytes] = {}
+        self.ultima_resposta: RespostaFalsa | None = None
+
+    def guardar(self, document_id: uuid.UUID, conteudo: bytes) -> str:
+        chave = f"{document_id}.pdf"
+        self.objetos[chave] = conteudo
+        return chave
+
+    def abrir(self, chave: str) -> RespostaFalsa:
+        if chave not in self.objetos:
+            raise ArquivoAusente(chave)
+        self.ultima_resposta = RespostaFalsa(self.objetos[chave])
+        return self.ultima_resposta
+
+    def remover(self, chave: str) -> None:
+        self.objetos.pop(chave, None)
+
+
+@pytest.fixture(name="armazenamento", autouse=True)
+def armazenamento_fixture(monkeypatch):
+    falso = ArmazenamentoFalso()
+    monkeypatch.setattr("app.api.routers.documents.guardar_pdf", falso.guardar)
+    monkeypatch.setattr("app.api.routers.documents.abrir_pdf", falso.abrir)
+    monkeypatch.setattr("app.api.routers.documents.remover_pdf", falso.remover)
+    return falso
 
 
 class MilvusFalso:
@@ -239,6 +285,119 @@ def test_exclusao_limpa_as_quatro_collections_e_o_banco(cliente, sessao, monkeyp
 def test_exclusao_de_documento_inexistente_responde_404(cliente, monkeypatch):
     monkeypatch.setattr("app.api.routers.documents.construir_cliente", lambda: MilvusFalso())
     assert cliente.delete(f"/api/documents/{uuid.uuid4()}").status_code == 404
+
+
+def _enviar(cliente, conteudo: bytes = b"%PDF-1.4 conteudo"):
+    return cliente.post(
+        "/api/documents",
+        data=_formulario(),
+        files={"arquivo": ("lgpd.pdf", conteudo, MIME_PDF)},
+    )
+
+
+def test_upload_guarda_o_pdf_e_a_chave(cliente, sessao, agendadas, armazenamento):
+    _enviar(cliente)
+
+    documento = sessao.exec(select(Document)).one()
+    assert documento.arquivo_chave == f"{documento.id}.pdf"
+    assert armazenamento.objetos[documento.arquivo_chave] == b"%PDF-1.4 conteudo"
+
+
+def test_falha_no_minio_recusa_o_upload_sem_criar_documento(
+    cliente, sessao, agendadas, monkeypatch
+):
+    def falhar(*_argumentos):
+        raise ConnectionError("minio fora do ar")
+
+    monkeypatch.setattr("app.api.routers.documents.guardar_pdf", falhar)
+
+    assert _enviar(cliente).status_code == 502
+    assert sessao.exec(select(Document)).all() == []
+    assert agendadas == []
+
+
+def test_download_entrega_o_pdf_inline_e_fecha_a_conexao(cliente, sessao, agendadas, armazenamento):
+    _enviar(cliente)
+    documento = sessao.exec(select(Document)).one()
+
+    resposta = cliente.get(f"/api/documents/{documento.id}/arquivo")
+
+    assert resposta.status_code == 200
+    assert resposta.content == b"%PDF-1.4 conteudo"
+    assert resposta.headers["content-type"] == MIME_PDF
+    assert resposta.headers["content-disposition"] == 'inline; filename="lgpd.pdf"'
+    assert armazenamento.ultima_resposta.fechada
+
+
+def test_download_sem_arquivo_responde_404(cliente, sessao):
+    documento = _documento(sessao)
+    assert cliente.get(f"/api/documents/{documento.id}/arquivo").status_code == 404
+
+
+def test_download_com_objeto_sumido_do_bucket_responde_404(cliente, sessao):
+    documento = _documento(sessao, arquivo_chave="sumiu.pdf")
+    assert cliente.get(f"/api/documents/{documento.id}/arquivo").status_code == 404
+
+
+def test_listagem_informa_o_pdf_sem_expor_a_chave(cliente, sessao):
+    _documento(sessao, arquivo_chave="abc.pdf")
+    _documento(sessao, slug="antigo", sha256="d" * 64)
+
+    corpo = {item["slug"]: item for item in cliente.get("/api/documents").json()}
+
+    assert corpo["lgpd"]["pdf_disponivel"] is True
+    assert corpo["antigo"]["pdf_disponivel"] is False
+    assert "arquivo_chave" not in corpo["lgpd"]
+
+
+def test_anexar_aceita_o_mesmo_arquivo_sem_repetir_a_ingestao(
+    cliente, sessao, agendadas, armazenamento
+):
+    conteudo = b"%PDF-1.4 antigo"
+    documento = _documento(sessao, sha256=hashlib.sha256(conteudo).hexdigest())
+
+    resposta = cliente.put(
+        f"/api/documents/{documento.id}/arquivo",
+        files={"arquivo": ("lgpd.pdf", conteudo, MIME_PDF)},
+    )
+
+    assert resposta.status_code == 200
+    assert resposta.json()["pdf_disponivel"] is True
+    assert armazenamento.objetos[f"{documento.id}.pdf"] == conteudo
+    assert agendadas == []
+
+
+def test_anexar_recusa_arquivo_diferente_do_ingerido(cliente, sessao, armazenamento):
+    documento = _documento(sessao)
+
+    resposta = cliente.put(
+        f"/api/documents/{documento.id}/arquivo",
+        files={"arquivo": ("lgpd.pdf", b"%PDF-1.4 outro", MIME_PDF)},
+    )
+
+    assert resposta.status_code == 409
+    assert armazenamento.objetos == {}
+
+
+def test_exclusao_remove_o_pdf_do_bucket(cliente, sessao, armazenamento, monkeypatch):
+    armazenamento.objetos["abc.pdf"] = b"%PDF"
+    documento = _documento(sessao, arquivo_chave="abc.pdf")
+    monkeypatch.setattr("app.api.routers.documents.construir_cliente", lambda: MilvusFalso())
+
+    assert cliente.delete(f"/api/documents/{documento.id}").status_code == 204
+    assert armazenamento.objetos == {}
+
+
+def test_falha_ao_remover_o_pdf_mantem_o_documento(cliente, sessao, monkeypatch):
+    def falhar(_chave):
+        raise ConnectionError("minio fora do ar")
+
+    documento = _documento(sessao, arquivo_chave="abc.pdf")
+    monkeypatch.setattr("app.api.routers.documents.construir_cliente", lambda: MilvusFalso())
+    monkeypatch.setattr("app.api.routers.documents.remover_pdf", falhar)
+
+    assert cliente.delete(f"/api/documents/{documento.id}").status_code == 502
+    assert sessao.get(Document, documento.id) is not None
 
 
 def test_acervo_so_aceita_pdf(cliente):

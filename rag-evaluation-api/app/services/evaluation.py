@@ -20,12 +20,16 @@ from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.core.milvus import construir_cliente
-from app.models.evaluation import PipelineAnswer, QuestionRound
+from app.models.evaluation import PipelineAnswer, QuestionRound, RoundFailure
 from app.models.pipeline import Pipeline
-from app.models.telemetry import AnswerStageMetric, EtapaChunk, RetrievedChunk
+from app.models.telemetry import AnswerStageMetric, EtapaChunk, EtapaPipeline, RetrievedChunk
 from app.rag.pipeline import RespostaDePipeline, executar_pipeline
+from app.services.analise import custo_usd
 
 ROTULOS = ("A", "B", "C", "D")
+
+# Em memoria porque a API roda em um unico processo.
+_rodadas_em_geracao = 0
 
 
 class ErroDeRodada(Exception):
@@ -150,13 +154,21 @@ def _persistir(
     pipelines: Sequence[Pipeline],
     resultados: Sequence[RespostaDePipeline],
     rotulos: Sequence[str],
+    rodadas_simultaneas: int,
 ) -> QuestionRound:
     ordem = len(listar_rodadas(sessao, session_id, document_id)) + 1
+    na_sessao = sessao.exec(
+        select(func.count())
+        .select_from(QuestionRound)
+        .where(QuestionRound.session_id == session_id)
+    ).one()
     rodada = QuestionRound(
         session_id=session_id,
         document_id=document_id,
         pergunta=pergunta,
         ordem=ordem,
+        ordem_na_sessao=int(na_sessao) + 1,
+        rodadas_simultaneas=rodadas_simultaneas,
         respondido_em=datetime.now(UTC),
     )
     sessao.add(rodada)
@@ -173,6 +185,14 @@ def _persistir(
             # O front lista em ordem de rotulo; a posicao fica gravada caso o layout mude.
             posicao_exibida=ROTULOS.index(rotulo) + 1,
             texto=resultado.texto,
+            motivo_parada=next(
+                (
+                    metrica.detalhes.get("motivo_parada")
+                    for metrica in resultado.metricas
+                    if metrica.etapa is EtapaPipeline.GENERATION
+                ),
+                None,
+            ),
             config_snapshot=dict(pipeline.config or {}),
         )
         sessao.add(resposta)
@@ -189,6 +209,9 @@ def _persistir(
                     tokens_completion=metrica.tokens_completion,
                     tokens_total=metrica.tokens_total,
                     modelo=metrica.modelo,
+                    custo_usd=custo_usd(
+                        metrica.modelo, metrica.tokens_prompt, metrica.tokens_completion
+                    ),
                     detalhes=metrica.detalhes,
                 )
             )
@@ -234,9 +257,30 @@ async def criar_rodada(
     if not pipelines:
         raise ErroDeRodada("Nenhum pipeline ativo cadastrado.")
 
-    resultados = await _gerar_respostas(pipelines, document_id, pergunta, deps)
+    global _rodadas_em_geracao
+    _rodadas_em_geracao += 1
+    simultaneas = _rodadas_em_geracao
+    try:
+        resultados = await _gerar_respostas(pipelines, document_id, pergunta, deps)
+        # A que chegou depois tambem disputou o reordenador com esta.
+        simultaneas = max(simultaneas, _rodadas_em_geracao)
+    finally:
+        _rodadas_em_geracao -= 1
     rotulos = deps.sortear_rotulos(len(pipelines))
-    return _persistir(sessao, session_id, document_id, pergunta, pipelines, resultados, rotulos)
+    return _persistir(
+        sessao, session_id, document_id, pergunta, pipelines, resultados, rotulos, simultaneas
+    )
+
+
+def registrar_falha(
+    sessao: Session, session_id: uuid.UUID, document_id: uuid.UUID, pergunta: str, erro: str
+) -> None:
+    sessao.add(
+        RoundFailure(
+            session_id=session_id, document_id=document_id, pergunta=pergunta, erro=erro[:2000]
+        )
+    )
+    sessao.commit()
 
 
 def registrar_escolha(
@@ -247,6 +291,10 @@ def registrar_escolha(
     tempo_total_ms: int | None = None,
     tempo_geracao_ms: int | None = None,
     tempo_oculto_ms: int | None = None,
+    tempo_pergunta_ms: int | None = None,
+    respostas_vistas: int | None = None,
+    recarregamentos: int | None = None,
+    largura_tela: int | None = None,
 ) -> None:
     """Sem `resposta`, o avaliador marcou que nenhuma das quatro esta correta."""
     rodada.escolha_answer_id = resposta.id if resposta else None
@@ -255,6 +303,10 @@ def registrar_escolha(
     rodada.tempo_total_ms = tempo_total_ms
     rodada.tempo_geracao_ms = tempo_geracao_ms
     rodada.tempo_oculto_ms = tempo_oculto_ms
+    rodada.tempo_pergunta_ms = tempo_pergunta_ms
+    rodada.respostas_vistas = respostas_vistas
+    rodada.recarregamentos = recarregamentos
+    rodada.largura_tela = largura_tela
     sessao.add(rodada)
     sessao.commit()
     sessao.refresh(rodada)

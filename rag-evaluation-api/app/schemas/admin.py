@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.models.pipeline import ParserType
 from app.models.study import StatusEstudo
-from app.models.telemetry import EtapaChunk, EtapaPipeline
+from app.models.telemetry import CausaErro, EtapaChunk, EtapaPipeline
 
 
 class EstudoCriar(BaseModel):
@@ -143,6 +143,11 @@ class AvaliacaoDetalhe(BaseModel):
     termo_versao: str
     aceito_em: datetime | None
     rodadas: list[RodadaAdmin]
+
+
+class AnotacaoEntrada(BaseModel):
+    causa: CausaErro
+    nota: str = Field(default="", max_length=2000)
 
 
 class RagasDisparado(BaseModel):

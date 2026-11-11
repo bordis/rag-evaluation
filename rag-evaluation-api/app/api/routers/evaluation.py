@@ -22,6 +22,7 @@ from app.services.evaluation import (
     criar_rodada,
     listar_rodadas,
     registrar_escolha,
+    registrar_falha,
     respostas_da_rodada,
     rodada_pendente,
 )
@@ -103,6 +104,7 @@ async def fazer_pergunta(
     try:
         rodada = await criar_rodada(sessao, session_id, documento.id, pergunta.strip())
     except ErroDeRodada as erro:
+        registrar_falha(sessao, session_id, documento.id, pergunta.strip(), str(erro))
         # A falha de um unico pipeline invalida a rodada: escolher entre 3 respostas produziria um
         # dado que nao agrega com os das demais rodadas.
         raise HTTPException(
@@ -157,5 +159,9 @@ def escolher_resposta(
         tempo_total_ms=escolha.tempo_total_ms,
         tempo_geracao_ms=escolha.tempo_geracao_ms,
         tempo_oculto_ms=escolha.tempo_oculto_ms,
+        tempo_pergunta_ms=escolha.tempo_pergunta_ms,
+        respostas_vistas=escolha.respostas_vistas,
+        recarregamentos=escolha.recarregamentos,
+        largura_tela=escolha.largura_tela,
     )
     return _montar_rodada(sessao, rodada)

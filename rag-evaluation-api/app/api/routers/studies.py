@@ -11,7 +11,7 @@ from app.core.db import SessionDep
 from app.models.evaluation import EvaluationSession, QuestionRound
 from app.models.study import StatusEstudo, Study
 from app.schemas.admin import EstudoCriar, EstudoResumo
-from app.services.studies import estudo_aberto, impedimento_para_abrir
+from app.services.studies import estudo_aberto, impedimento_para_abrir, retrato_do_ambiente
 
 router = APIRouter(prefix="/api/studies", tags=["estudos"])
 
@@ -61,7 +61,9 @@ def criar_estudo(sessao: SessionDep, dados: EstudoCriar) -> EstudoResumo:
     impedimento = impedimento_para_abrir(sessao)
     if impedimento:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=impedimento)
-    estudo = Study(nome=dados.nome, descricao=dados.descricao)
+    estudo = Study(
+        nome=dados.nome, descricao=dados.descricao, config_snapshot=retrato_do_ambiente(sessao)
+    )
     sessao.add(estudo)
     sessao.commit()
     sessao.refresh(estudo)

@@ -7,7 +7,9 @@ import pytest
 from sqlmodel import Session, select
 
 from app.models.document import Document, StatusDocumento
+from app.models.evaluation import PipelineAnswer, QuestionRound, RoundFailure
 from app.models.pipeline import Pipeline
+from app.models.study import Study
 from app.models.telemetry import EtapaChunk, RagasScore, RetrievedChunk
 from app.rag.pipeline import RespostaDePipeline
 from app.rag.retrieval.base import Candidato
@@ -359,3 +361,136 @@ def test_chunks_ficam_gravados_com_a_etapa(cliente, sessao, documento):
     etapas = {item.etapa for item in sessao.exec(select(RetrievedChunk)).all()}
 
     assert etapas == {EtapaChunk.DENSO, EtapaChunk.CONTEXTO_FINAL}
+
+
+def test_estudo_congela_modelos_prompts_e_pipelines(cliente, sessao):
+    estudo = _abrir(cliente)
+
+    registro = sessao.get(Study, uuid.UUID(estudo["id"]))
+
+    assert registro.config_snapshot["geracao"]["prompt"]
+    assert registro.config_snapshot["precos_por_milhao_de_tokens"]
+    assert set(registro.config_snapshot["pipelines"]) == {
+        f"pipeline-{numero}" for numero in (1, 2, 3, 4)
+    }
+
+
+def test_rodada_grava_as_medidas_da_coleta_e_elas_chegam_ao_csv(cliente, sessao, documento):
+    estudo = _abrir(cliente)
+    sessao_id = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"}).json()[
+        "id"
+    ]
+    rodada = cliente.post(
+        f"/api/sessions/{sessao_id}/documents/{documento.slug}/questions",
+        json={"pergunta": "Qual o prazo?"},
+    ).json()
+
+    cliente.post(
+        f"/api/rounds/{rodada['id']}/choice",
+        json={
+            "rotulo": "A",
+            "tempo_total_ms": 60000,
+            "tempo_pergunta_ms": 8000,
+            "respostas_vistas": 4,
+            "recarregamentos": 1,
+            "largura_tela": 390,
+        },
+    )
+
+    registro = sessao.get(QuestionRound, uuid.UUID(rodada["id"]))
+    assert registro.tempo_pergunta_ms == 8000
+    assert registro.respostas_vistas == 4
+    assert registro.ordem_na_sessao == 1
+    assert registro.rodadas_simultaneas == 1
+    csv_texto = cliente.get(f"/api/admin/studies/{estudo['id']}/export.csv").text
+    assert "tempo_pergunta_ms" in csv_texto.splitlines()[0]
+    estatisticas = cliente.get(f"/api/admin/studies/{estudo['id']}/stats").json()
+    assert estatisticas["coleta"]["viu_todas"]["sucessos"] == 1
+    assert estatisticas["ambiente"]["geracao"]["modelo"]
+
+
+def test_mais_de_quatro_respostas_vistas_e_recusado(cliente, documento):
+    _, rodada = _rodada_pendente(cliente, documento)
+
+    resposta = cliente.post(
+        f"/api/rounds/{rodada['id']}/choice", json={"rotulo": "A", "respostas_vistas": 5}
+    )
+
+    assert resposta.status_code == 422
+
+
+def _rodada_pendente(cliente, documento) -> tuple[dict, dict]:
+    estudo = _abrir(cliente)
+    sessao_id = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"}).json()[
+        "id"
+    ]
+    rodada = cliente.post(
+        f"/api/sessions/{sessao_id}/documents/{documento.slug}/questions",
+        json={"pergunta": "Qual o prazo?"},
+    ).json()
+    return estudo, rodada
+
+
+def test_falha_de_rodada_fica_registrada_e_aparece_nas_estatisticas(
+    cliente, sessao, documento, monkeypatch
+):
+    async def falhar(sessao, session_id, document_id, pergunta):
+        raise servico.ErroDeRodada("RuntimeError: openai fora do ar")
+
+    monkeypatch.setattr("app.api.routers.evaluation.criar_rodada", falhar)
+    estudo = _abrir(cliente)
+    sessao_id = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"}).json()[
+        "id"
+    ]
+
+    resposta = cliente.post(
+        f"/api/sessions/{sessao_id}/documents/{documento.slug}/questions",
+        json={"pergunta": "Qual o prazo?"},
+    )
+
+    assert resposta.status_code == 502
+    falha = sessao.exec(select(RoundFailure)).one()
+    assert falha.pergunta == "Qual o prazo?"
+    estatisticas = cliente.get(f"/api/admin/studies/{estudo['id']}/stats").json()
+    assert estatisticas["coleta"]["falhas_de_rodada"] == 1
+
+
+def test_anotacao_de_erro_entra_nas_causas_confirmadas_e_pode_ser_refeita(
+    cliente, sessao, documento
+):
+    estudo = _abrir(cliente)
+    sessao_id = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"}).json()[
+        "id"
+    ]
+    rodada = cliente.post(
+        f"/api/sessions/{sessao_id}/documents/{documento.slug}/questions",
+        json={"pergunta": "Qual o prazo?"},
+    ).json()
+    cliente.post(f"/api/rounds/{rodada['id']}/choice", json={"rotulo": None})
+    resposta_id = sessao.exec(
+        select(PipelineAnswer.id).where(PipelineAnswer.round_id == uuid.UUID(rodada["id"]))
+    ).first()
+
+    url = f"/api/admin/answers/{resposta_id}/anotacao"
+    assert cliente.put(url, json={"causa": "geracao"}).status_code == 200
+    assert cliente.put(url, json={"causa": "conversao", "nota": "tabela"}).status_code == 200
+
+    erros = cliente.get(f"/api/admin/studies/{estudo['id']}/stats").json()["erros"]
+    causas = [item["causas"] for item in erros["causas_confirmadas"] if item["causas"]]
+    assert causas == [{"conversao": 1}]
+
+    assert cliente.delete(url).status_code == 204
+    erros = cliente.get(f"/api/admin/studies/{estudo['id']}/stats").json()["erros"]
+    assert all(not item["causas"] for item in erros["causas_confirmadas"])
+
+
+def test_anotar_resposta_inexistente_responde_404(cliente):
+    resposta = cliente.put(f"/api/admin/answers/{uuid.uuid4()}/anotacao", json={"causa": "outra"})
+
+    assert resposta.status_code == 404
+
+
+def test_causa_desconhecida_e_recusada(cliente):
+    resposta = cliente.put(f"/api/admin/answers/{uuid.uuid4()}/anotacao", json={"causa": "x"})
+
+    assert resposta.status_code == 422

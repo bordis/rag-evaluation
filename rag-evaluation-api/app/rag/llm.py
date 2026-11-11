@@ -20,6 +20,7 @@ class RespostaLLM:
     tokens_completion: int
     tokens_total: int
     modelo: str
+    motivo_parada: str | None = None
 
 
 @lru_cache
@@ -63,4 +64,5 @@ def conversar(
         # O modelo vem da resposta, nao da config: a API devolve o snapshot exato usado, que e o
         # que precisa constar na dissertacao para a medicao ser reproduzivel.
         modelo=resposta.model,
+        motivo_parada=getattr(resposta.choices[0], "finish_reason", None),
     )

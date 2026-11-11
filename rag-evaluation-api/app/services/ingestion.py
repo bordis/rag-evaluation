@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.core.db import engine
 from app.core.milvus import construir_cliente
 from app.models.document import Document, DocumentIngestion, StatusDocumento, StatusIngestao
-from app.models.pipeline import Pipeline
+from app.models.pipeline import ParserType, Pipeline
 from app.rag.chunking import Chunk, dividir_em_chunks
 from app.rag.embedding import ResultadoEmbedding, embutir_textos
 from app.rag.indexing import indexar_chunks
@@ -169,3 +169,24 @@ def executar_ingestao(
     """Ponto de entrada do BackgroundTasks: a sessao da requisicao ja foi fechada aqui."""
     with Session(engine) as sessao:
         ingerir_documento(sessao, document_id, conteudo, mime_type, nome_arquivo)
+
+
+def retrato_da_ingestao(parser: ParserType) -> dict:
+    """O que define os chunks deste pipeline; o Docling so entra onde foi usado."""
+    settings = get_settings()
+    retrato: dict = {
+        "parser": parser.value,
+        "chunk_size": settings.chunk_size,
+        "chunk_overlap": settings.chunk_overlap,
+        "embedding": settings.embedding_model,
+    }
+    if parser is ParserType.DOCLING:
+        retrato["docling"] = {
+            "ocr": settings.docling_do_ocr,
+            "backend_pdf": settings.docling_pdf_backend,
+            "modo_tabelas": settings.docling_table_mode,
+            "descrever_imagens": settings.docling_descrever_imagens,
+            "imagem_area_minima": settings.docling_imagem_area_minima,
+            "imagem_modelo": settings.docling_imagem_modelo,
+        }
+    return retrato

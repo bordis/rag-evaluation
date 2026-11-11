@@ -7,6 +7,7 @@ consome dezenas de chamadas. Por isso o disparo e sempre uma acao explicita do a
 import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
+from importlib.metadata import version
 from statistics import fmean
 
 from sqlmodel import Session, select
@@ -100,6 +101,8 @@ async def calcular_notas(
             answer_id=answer_id, modelo=modelo
         )
         registro.modelo = modelo
+        registro.embedding_modelo = get_settings().embedding_model
+        registro.ragas_versao = version("ragas")
         registro.erro = erro
         registro.duracao_ms = relogio.ms
         if notas is not None:

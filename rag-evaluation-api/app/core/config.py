@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     milvus_collection_name_3: str = "evaluation3"
     milvus_collection_name_4: str = "evaluation4"
 
+    # MinIO — guarda os PDFs do acervo, em bucket separado do que o Milvus usa
+    minio_url: str = "http://localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket_documentos: str = "documentos"
+
     # Docling
     docling_url: str = "http://localhost:5001"
     # Converter um PDF grande leva minutos; o timeout de consulta (60s) nao serve aqui.

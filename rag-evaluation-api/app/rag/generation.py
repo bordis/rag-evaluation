@@ -45,5 +45,6 @@ def gerar_resposta(
         "trechos": len(candidatos),
         "caracteres": sum(len(candidato.texto) for candidato in candidatos),
         "sem_contexto": not candidatos,
+        "motivo_parada": resposta.motivo_parada,
     }
     return resposta.texto, metrica_de_llm(EtapaPipeline.GENERATION, relogio.ms, resposta, detalhes)

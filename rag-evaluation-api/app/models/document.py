@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import Column, DateTime
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlmodel import Field, SQLModel
 
@@ -35,6 +36,8 @@ class Document(SQLModel, table=True):
     mime_type: str = Field(max_length=120)
     tamanho_bytes: int
     sha256: str = Field(max_length=64, index=True)
+    # Chave do PDF no MinIO. Nula nos documentos enviados antes de o arquivo passar a ser guardado.
+    arquivo_chave: str | None = Field(default=None, max_length=128)
     # Contados pelo Docling, para a tabela descritiva do acervo.
     paginas: int | None = Field(default=None)
     tabelas: int | None = Field(default=None)
@@ -79,6 +82,8 @@ class DocumentIngestion(SQLModel, table=True):
         ),
     )
     erro: str | None = Field(default=None, max_length=2000)
+    # Foto do que define os chunks: a resposta guarda a config da busca, nao a da ingestao.
+    config_snapshot: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
     total_caracteres: int = Field(default=0)
     total_chunks: int = Field(default=0)
     tokens_embedding: int = Field(default=0)

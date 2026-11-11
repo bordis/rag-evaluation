@@ -19,6 +19,7 @@ dependencies = [
     "langchain-community<0.4",
     "tiktoken>=0.14.0",
     "truststore>=0.10.5",
+    "minio>=7.2.20",
 ]
 
 [dependency-groups]

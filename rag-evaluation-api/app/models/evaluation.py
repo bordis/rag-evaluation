@@ -43,6 +43,17 @@ class QuestionRound(SQLModel, table=True):
     tempo_total_ms: int | None = Field(default=None)
     tempo_geracao_ms: int | None = Field(default=None)
     tempo_oculto_ms: int | None = Field(default=None)
+    # Parte de `tempo_total_ms` gasta escrevendo a pergunta: sem ela, fadiga se confunde com isso.
+    tempo_pergunta_ms: int | None = Field(default=None)
+    # Quantas das 4 respostas chegaram a aparecer na tela antes da escolha. Nulo: sem medicao.
+    respostas_vistas: int | None = Field(default=None)
+    recarregamentos: int | None = Field(default=None)
+    # Com tela estreita as respostas empilham, e a ultima fica longe da primeira.
+    largura_tela: int | None = Field(default=None)
+    # `ordem` recomeca a cada documento; a fadiga acumula na sessao inteira.
+    ordem_na_sessao: int | None = Field(default=None)
+    # Incluindo esta. Em CPU, a latencia do reordenador cresce com a concorrencia.
+    rodadas_simultaneas: int | None = Field(default=None)
     # `criado_em` e o inicio da transacao, antes da geracao; este marco e o fim dela.
     respondido_em: datetime | None = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
@@ -71,5 +82,25 @@ class PipelineAnswer(SQLModel, table=True):
     rotulo_cego: str = Field(max_length=1)
     posicao_exibida: int
     texto: str
+    # `finish_reason`: "length" e resposta cortada, que perde por motivo alheio aos fatores.
+    motivo_parada: str | None = Field(default=None, max_length=32)
     # Foto da configuracao usada: editar o pipeline depois nao reescreve o que ja foi coletado.
     config_snapshot: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+
+
+class RoundFailure(SQLModel, table=True):
+    """Pergunta que nao virou rodada. Se so certas perguntas falham, a amostra fica enviesada."""
+
+    __tablename__ = "round_failures"
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: uuid.UUID = Field(
+        foreign_key="evaluation_sessions.id", index=True, ondelete="CASCADE"
+    )
+    document_id: uuid.UUID = Field(foreign_key="documents.id", index=True, ondelete="CASCADE")
+    pergunta: str = Field(max_length=500)
+    erro: str = Field(max_length=2000)
+    criado_em: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False),
+    )

@@ -7,7 +7,7 @@ o frontend nunca chama esse endpoint. A garantia do cego vale para os schemas de
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field
 
 from app.models.document import StatusDocumento, StatusIngestao
 
@@ -24,6 +24,13 @@ class DocumentoResumo(BaseModel):
     tabelas: int | None
     imagens: int | None
     criado_em: datetime
+    # A chave do MinIO fica no servidor; o navegador so precisa saber se ha o que abrir.
+    arquivo_chave: str | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def pdf_disponivel(self) -> bool:
+        return self.arquivo_chave is not None
 
 
 class DocumentoDetalhe(DocumentoResumo):

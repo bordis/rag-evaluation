@@ -29,6 +29,18 @@ class EtapaChunk(StrEnum):
     CONTEXTO_FINAL = "contexto_final"
 
 
+class CausaErro(StrEnum):
+    """Classificacao final do pesquisador, depois de ler os trechos da resposta recusada."""
+
+    SEM_RESPOSTA_NO_DOCUMENTO = "sem_resposta_no_documento"
+    CONVERSAO = "conversao"
+    RECUPERACAO = "recuperacao"
+    SELECAO = "selecao"
+    GERACAO = "geracao"
+    AVALIADOR = "avaliador"
+    OUTRA = "outra"
+
+
 class AnswerStageMetric(SQLModel, table=True):
     """Uma linha por etapa executada. Pipelines 1 e 2 geram 3; os 3 e 4, ate 6."""
 
@@ -43,6 +55,8 @@ class AnswerStageMetric(SQLModel, table=True):
     tokens_completion: int | None = Field(default=None)
     tokens_total: int | None = Field(default=None)
     modelo: str | None = Field(default=None, max_length=64)
+    # Calculado ao gravar: mudar a tabela de precos depois nao reescreve o custo da coleta.
+    custo_usd: float | None = Field(default=None)
     detalhes: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
 
 
@@ -79,9 +93,33 @@ class RagasScore(SQLModel, table=True):
     precisao_contexto: float | None = Field(default=None)
     media: float | None = Field(default=None)
     modelo: str = Field(max_length=64)
+    # As notas mudam com a biblioteca e com o modelo de embedding da relevancia.
+    embedding_modelo: str | None = Field(default=None, max_length=64)
+    ragas_versao: str | None = Field(default=None, max_length=32)
     duracao_ms: int = Field(default=0)
     erro: str | None = Field(default=None, max_length=2000)
     criado_em: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), server_default=func.now(), nullable=False),
+    )
+
+
+class AnswerAnnotation(SQLModel, table=True):
+    """A triagem pelo RAGAS e uma hipotese; a causa de cada erro e o pesquisador quem confirma."""
+
+    __tablename__ = "answer_annotations"
+
+    answer_id: uuid.UUID = Field(
+        foreign_key="pipeline_answers.id", primary_key=True, ondelete="CASCADE"
+    )
+    causa: CausaErro = Field(sa_column=Column(coluna_enum(CausaErro, 32), nullable=False))
+    nota: str = Field(default="", max_length=2000)
+    anotado_em: datetime | None = Field(
+        default=None,
+        sa_column=Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        ),
     )

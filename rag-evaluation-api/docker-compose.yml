@@ -52,6 +52,10 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    # A API roda no host e guarda os PDFs aqui. O 9001 e o console; so 127.0.0.1, como o Attu.
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
 
   milvus:
     container_name: rag-milvus
@@ -77,6 +81,20 @@ services:
     depends_on:
       - etcd
       - minio
+
+  attu:
+    container_name: rag-attu
+    image: zilliz/attu:v3.0.1
+    environment:
+      MILVUS_ADDRESS: milvus:19530
+      # Sem login: a porta so escuta em 127.0.0.1.
+      ATTU_AUTH_MODE: none
+    volumes:
+      - attu-data:/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - milvus
 
   docling:
     container_name: rag-docling
@@ -113,3 +131,4 @@ services:
 
 volumes:
   postgres-data:
+  attu-data:

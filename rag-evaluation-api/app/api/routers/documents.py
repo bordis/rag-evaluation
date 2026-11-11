@@ -3,11 +3,14 @@
 import hashlib
 import pathlib
 import uuid
+from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
+from app.core.armazenamento import ArquivoAusente, abrir_pdf, guardar_pdf, remover_pdf
 from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.milvus import construir_cliente
@@ -22,7 +25,7 @@ from app.schemas.document import (
     DocumentoResumo,
     IngestaoResumo,
 )
-from app.services.ingestion import executar_ingestao
+from app.services.ingestion import executar_ingestao, retrato_da_ingestao
 
 router = APIRouter(prefix="/api/documents", tags=["documentos"])
 
@@ -39,6 +42,26 @@ def _resolver_mime(arquivo: UploadFile) -> str:
     )
 
 
+def _ler_arquivo(arquivo: UploadFile) -> bytes:
+    limite = get_settings().max_upload_mb * 1024 * 1024
+    conteudo = arquivo.file.read()
+    if len(conteudo) > limite:
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"O arquivo excede o limite de {get_settings().max_upload_mb} MB.",
+        )
+    return conteudo
+
+
+def _guardar(documento_id: uuid.UUID, conteudo: bytes) -> str:
+    try:
+        return guardar_pdf(documento_id, conteudo)
+    except Exception as erro:  # noqa: BLE001
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, detail=f"Falha ao guardar o PDF no MinIO: {erro}"
+        ) from erro
+
+
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 def enviar_documento(
     sessao: SessionDep,
@@ -50,15 +73,9 @@ def enviar_documento(
     descricao: Annotated[str, Form(max_length=1000)] = "",
     icone: Annotated[str, Form(max_length=16)] = "",
 ) -> DocumentoAceito:
-    """Aceita o arquivo e agenda a ingestao nos 4 pipelines. O arquivo nao e guardado."""
+    """Guarda o PDF no MinIO e agenda a ingestao nos 4 pipelines."""
     mime_type = _resolver_mime(arquivo)
-    limite = get_settings().max_upload_mb * 1024 * 1024
-    conteudo = arquivo.file.read()
-    if len(conteudo) > limite:
-        raise HTTPException(
-            status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"O arquivo excede o limite de {get_settings().max_upload_mb} MB.",
-        )
+    conteudo = _ler_arquivo(arquivo)
 
     if sessao.exec(select(Document).where(Document.slug == slug)).first() is not None:
         raise HTTPException(
@@ -84,13 +101,21 @@ def enviar_documento(
         tamanho_bytes=len(conteudo),
         sha256=sha256,
     )
+    # Antes do commit: se o MinIO falhar, nao nasce documento sem arquivo.
+    documento.arquivo_chave = _guardar(documento.id, conteudo)
     sessao.add(documento)
     sessao.commit()
     sessao.refresh(documento)
 
     # As 4 linhas nascem pendentes para o endpoint de telemetria ja mostrar o quadro completo.
     for pipeline in sessao.exec(select(Pipeline).order_by(Pipeline.codigo)).all():
-        sessao.add(DocumentIngestion(document_id=documento.id, pipeline_id=pipeline.id))
+        sessao.add(
+            DocumentIngestion(
+                document_id=documento.id,
+                pipeline_id=pipeline.id,
+                config_snapshot=retrato_da_ingestao(pipeline.parser),
+            )
+        )
     sessao.commit()
 
     tarefas.add_task(
@@ -124,6 +149,59 @@ def obter_documento(sessao: SessionDep, documento_id: uuid.UUID) -> DocumentoDet
     documento = sessao.get(Document, documento_id)
     if documento is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Documento não encontrado.")
+    return DocumentoDetalhe.model_validate(documento, from_attributes=True)
+
+
+@router.get("/{documento_id}/arquivo")
+def baixar_arquivo(sessao: SessionDep, documento_id: uuid.UUID) -> StreamingResponse:
+    """O PDF original, igual para os 4 pipelines: consulta-lo nao revela nada sobre os bracos."""
+    documento = sessao.get(Document, documento_id)
+    if documento is None or documento.arquivo_chave is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="PDF não disponível.")
+    try:
+        resposta = abrir_pdf(documento.arquivo_chave)
+    except ArquivoAusente as erro:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="PDF não disponível.") from erro
+    except Exception as erro:  # noqa: BLE001
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, detail=f"Falha ao ler o PDF no MinIO: {erro}"
+        ) from erro
+
+    def blocos() -> Iterator[bytes]:
+        try:
+            yield from resposta.stream(64 * 1024)
+        finally:
+            resposta.close()
+            resposta.release_conn()
+
+    return StreamingResponse(
+        blocos(),
+        media_type=MIME_DO_ACERVO,
+        headers={"Content-Disposition": f'inline; filename="{documento.slug}.pdf"'},
+    )
+
+
+@router.put("/{documento_id}/arquivo")
+def anexar_arquivo(
+    sessao: SessionDep, documento_id: uuid.UUID, arquivo: Annotated[UploadFile, File()]
+) -> DocumentoDetalhe:
+    """Anexa o PDF a um documento antigo sem repetir a ingestao, que custa Docling e embeddings."""
+    documento = sessao.get(Document, documento_id)
+    if documento is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Documento não encontrado.")
+    _resolver_mime(arquivo)
+    conteudo = _ler_arquivo(arquivo)
+    # O avaliador leria um arquivo diferente daquele de onde os chunks sairam.
+    if hashlib.sha256(conteudo).hexdigest() != documento.sha256:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Este arquivo não é o mesmo que foi ingerido neste documento.",
+        )
+
+    documento.arquivo_chave = _guardar(documento.id, conteudo)
+    sessao.add(documento)
+    sessao.commit()
+    sessao.refresh(documento)
     return DocumentoDetalhe.model_validate(documento, from_attributes=True)
 
 
@@ -182,6 +260,14 @@ def excluir_documento(sessao: SessionDep, documento_id: uuid.UUID) -> None:
             raise HTTPException(
                 status.HTTP_502_BAD_GATEWAY,
                 detail=f"Falha ao remover do Milvus ({pipeline.collection_name}): {erro}",
+            ) from erro
+
+    if documento.arquivo_chave is not None:
+        try:
+            remover_pdf(documento.arquivo_chave)
+        except Exception as erro:  # noqa: BLE001
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, detail=f"Falha ao remover o PDF do MinIO: {erro}"
             ) from erro
 
     sessao.delete(documento)

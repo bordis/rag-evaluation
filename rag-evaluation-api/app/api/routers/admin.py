@@ -17,8 +17,9 @@ from app.models.document import Document
 from app.models.evaluation import EvaluationSession, PipelineAnswer, QuestionRound
 from app.models.pipeline import ParserType, Pipeline
 from app.models.study import Study
-from app.models.telemetry import AnswerStageMetric, RagasScore, RetrievedChunk
+from app.models.telemetry import AnswerAnnotation, AnswerStageMetric, RagasScore, RetrievedChunk
 from app.schemas.admin import (
+    AnotacaoEntrada,
     AvaliacaoDetalhe,
     AvaliacaoResumo,
     ChunkDetalhe,
@@ -202,6 +203,31 @@ def obter_estatisticas(sessao: SessionDep, study_id: uuid.UUID) -> dict:
     return analisar_estudo(sessao, study_id)
 
 
+@router.put("/answers/{answer_id}/anotacao")
+def anotar_resposta(
+    sessao: SessionDep, answer_id: uuid.UUID, dados: AnotacaoEntrada
+) -> AnotacaoEntrada:
+    """A causa confirmada pelo pesquisador, depois de ler os trechos. Regravar substitui."""
+    if sessao.get(PipelineAnswer, answer_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Resposta não encontrada.")
+    anotacao = sessao.get(AnswerAnnotation, answer_id) or AnswerAnnotation(
+        answer_id=answer_id, causa=dados.causa
+    )
+    anotacao.causa = dados.causa
+    anotacao.nota = dados.nota
+    sessao.add(anotacao)
+    sessao.commit()
+    return dados
+
+
+@router.delete("/answers/{answer_id}/anotacao", status_code=status.HTTP_204_NO_CONTENT)
+def remover_anotacao(sessao: SessionDep, answer_id: uuid.UUID) -> None:
+    anotacao = sessao.get(AnswerAnnotation, answer_id)
+    if anotacao is not None:
+        sessao.delete(anotacao)
+        sessao.commit()
+
+
 @router.get("/studies/{study_id}/export.csv")
 def exportar_csv(sessao: SessionDep, study_id: uuid.UUID) -> Response:
     """Uma linha por rodada x pipeline, no formato que `analise/modelo_misto.R` le."""
@@ -237,6 +263,13 @@ def exportar_csv(sessao: SessionDep, study_id: uuid.UUID) -> Response:
             "tempo_total_ms",
             "tempo_geracao_ms",
             "tempo_oculto_ms",
+            "tempo_pergunta_ms",
+            "respostas_vistas",
+            "recarregamentos",
+            "largura_tela",
+            "ordem_na_sessao",
+            "rodadas_simultaneas",
+            "motivo_parada",
             "tamanho_resposta",
             "pergunta",
         ]
@@ -258,6 +291,13 @@ def exportar_csv(sessao: SessionDep, study_id: uuid.UUID) -> Response:
                 rodada.tempo_total_ms,
                 rodada.tempo_geracao_ms,
                 rodada.tempo_oculto_ms,
+                rodada.tempo_pergunta_ms,
+                rodada.respostas_vistas,
+                rodada.recarregamentos,
+                rodada.largura_tela,
+                rodada.ordem_na_sessao,
+                rodada.rodadas_simultaneas,
+                resposta.motivo_parada,
                 len(resposta.texto),
                 rodada.pergunta,
             ]
