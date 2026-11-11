@@ -1,0 +1,39 @@
+<section class="cartao">
+  <header class="topo">
+    <div>
+      <h2 class="titulo">{{ titulo() }}</h2>
+      @if (subtitulo(); as texto) {
+        <p class="subtitulo">{{ texto }}</p>
+      }
+    </div>
+    <button
+      class="botao"
+      type="button"
+      [attr.aria-expanded]="aberta()"
+      [attr.aria-controls]="idAjuda"
+      [attr.aria-label]="'Como interpretar: ' + titulo()"
+      [title]="'Como interpretar'"
+      (click)="alternar()"
+    >
+      ?
+    </button>
+  </header>
+
+  <div class="ajuda" [id]="idAjuda" [hidden]="!aberta()">
+    <h3>O que é</h3>
+    <p>{{ ajuda().oQueE }}</p>
+    <h3>Como ler</h3>
+    <ul>
+      @for (item of ajuda().comoLer; track item) {
+        <li>{{ item }}</li>
+      }
+    </ul>
+    @if (ajuda().cuidado; as cuidado) {
+      <h3>Cuidado</h3>
+      <p>{{ cuidado }}</p>
+    }
+    <p class="fontes"><strong>Fontes:</strong> {{ ajuda().fontes }}</p>
+  </div>
+
+  <ng-content />
+</section>

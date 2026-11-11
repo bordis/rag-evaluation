@@ -31,6 +31,27 @@ describe('ApiRag', () => {
     await expect(promessa).resolves.toEqual([]);
   });
 
+  it('converts the PDF availability and builds the file URL', async () => {
+    // Act
+    const promessa = api.listarDocumentos();
+    http.expectOne(`${base}/documents?status=pronto`).flush([
+      {
+        id: 'doc-1',
+        slug: 'lgpd',
+        titulo: 'LGPD',
+        area: 'Direito',
+        descricao: '',
+        icone: '',
+        pdf_disponivel: true,
+      },
+    ]);
+    const [documento] = await promessa;
+
+    // Assert
+    expect(documento.pdfDisponivel).toBe(true);
+    expect(api.urlDoPdf('doc-1')).toBe(`${base}/documents/doc-1/arquivo`);
+  });
+
   it('converts the snake_case round into the domain shape', async () => {
     // Act
     const promessa = api.perguntar('sessao-1', 'lgpd', 'O que a lei diz?');
@@ -89,6 +110,10 @@ describe('ApiRag', () => {
       tempo_total_ms: 90,
       tempo_geracao_ms: 20,
       tempo_oculto_ms: 5,
+      tempo_pergunta_ms: null,
+      respostas_vistas: null,
+      recarregamentos: null,
+      largura_tela: null,
     });
     await expect(promessa).resolves.toMatchObject({ nenhumaCorreta: true });
   });

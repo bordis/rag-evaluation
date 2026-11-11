@@ -1,0 +1,39 @@
+<figure class="figura">
+  <figcaption>{{ titulo() }}</figcaption>
+  <svg [attr.viewBox]="'0 0 ' + largura + ' ' + altura" role="img" [attr.aria-label]="titulo()">
+    @for (grade of desenho().grades; track grade.y) {
+      <line
+        class="grade"
+        [attr.x1]="esquerda"
+        [attr.x2]="limiteDireito"
+        [attr.y1]="grade.y"
+        [attr.y2]="grade.y"
+      />
+      <text class="eixo" [attr.x]="esquerda - 6" [attr.y]="grade.y + 3" text-anchor="end">
+        {{ grade.rotulo }}
+      </text>
+    }
+    @for (marca of desenho().marcasX; track marca.x) {
+      <text class="eixo" [attr.x]="marca.x" [attr.y]="limiteBase + 15" text-anchor="middle">
+        {{ marca.rotulo }}
+      </text>
+    }
+    @if (desenho().referenciaY; as y) {
+      <line
+        class="referencia"
+        [attr.x1]="esquerda"
+        [attr.x2]="limiteDireito"
+        [attr.y1]="y"
+        [attr.y2]="y"
+      />
+    }
+    <polyline class="serie" [attr.points]="desenho().caminho" />
+    @for (ponto of desenho().pontos; track ponto.x) {
+      <g>
+        <title>{{ ponto.dica }}</title>
+        <circle class="alvo" [attr.cx]="ponto.cx" [attr.cy]="ponto.cy" r="11" />
+        <circle class="ponto" [attr.cx]="ponto.cx" [attr.cy]="ponto.cy" r="4" />
+      </g>
+    }
+  </svg>
+</figure>

@@ -17,6 +17,7 @@
   @for (resposta of round().respostas; track resposta.rotuloCego) {
     <li
       class="answer surgir"
+      [attr.data-rotulo]="resposta.rotuloCego"
       [style.--ordem]="$index + 1"
       [class.answer--chosen]="round().escolhaRotulo === resposta.rotuloCego"
       [class.answer--dimmed]="decidida() && round().escolhaRotulo !== resposta.rotuloCego"

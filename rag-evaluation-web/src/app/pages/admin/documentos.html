@@ -44,6 +44,7 @@
       <th>Páginas</th>
       <th>Tabelas</th>
       <th>Imagens</th>
+      <th>PDF</th>
       <th>Ações</th>
     </tr>
   </thead>
@@ -64,6 +65,21 @@
         <td>{{ documento.paginas ?? '—' }}</td>
         <td>{{ documento.tabelas ?? '—' }}</td>
         <td>{{ documento.imagens ?? '—' }}</td>
+        <td>
+          @if (documento.pdf_disponivel) {
+            Guardado
+          } @else {
+            <button class="adm-btn" type="button" (click)="seletorPdf.click()">Anexar PDF</button>
+            <input
+              #seletorPdf
+              type="file"
+              accept="application/pdf,.pdf"
+              hidden
+              [attr.aria-label]="'Anexar PDF de ' + documento.titulo"
+              (change)="anexarPdf(documento, $event)"
+            />
+          }
+        </td>
         <td class="adm-acoes">
           <button class="adm-btn" type="button" (click)="verIngestoes(documento)">
             Exibir detalhes
@@ -73,7 +89,7 @@
       </tr>
       @if (aberto() === documento.id) {
         <tr>
-          <td colspan="7">
+          <td colspan="8">
             <table class="adm-tabela adm-tabela--interna">
               <thead>
                 <tr>
@@ -105,7 +121,7 @@
       }
     } @empty {
       <tr>
-        <td colspan="7">Nenhum documento enviado.</td>
+        <td colspan="8">Nenhum documento enviado.</td>
       </tr>
     }
   </tbody>

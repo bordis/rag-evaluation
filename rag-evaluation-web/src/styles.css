@@ -66,6 +66,15 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   /* Sombra rara (hover-elevated) */
+  /* Gráficos: ordem fixa, validada para daltonismo. Identidade nunca só pela cor: há legenda e tabela. */
+  --grafico-1: #4264cd;
+  --grafico-1-suave: #a9b8e8;
+  --grafico-2: #2fbcb7;
+  --grafico-3: #ff7f50;
+  --grafico-4: #7a4fbf;
+  --grafico-5: #d6a300;
+  --grafico-6: #b8418f;
+
   --shadow-soft: 0 1px 3px rgba(9, 30, 66, 0.08);
 }
 
@@ -316,12 +325,29 @@ button {
   font-size: 13px;
   text-decoration: none;
   cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.adm-btn:hover:not(:disabled) {
+  background-color: var(--color-surface-soft);
+}
+
+.adm-btn:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  outline-offset: 2px;
 }
 
 .adm-btn--primario {
   border-color: var(--color-primary);
   background-color: var(--color-primary);
   color: var(--color-on-primary);
+}
+
+.adm-btn--primario:hover:not(:disabled) {
+  border-color: var(--color-primary-active);
+  background-color: var(--color-primary-active);
 }
 
 .adm-btn:disabled {

@@ -13,12 +13,14 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { DomSanitizer } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 
 import { AnswerChoice } from '../../components/answer-choice/answer-choice';
 import { ChatMessage } from '../../components/chat-message/chat-message';
 import { ProgressoEtapas } from '../../components/progresso-etapas/progresso-etapas';
 import type { RotuloCego } from '../../models/evaluation-model';
+import { ApiRag } from '../../services/api-rag';
 import { CronometroRodada } from '../../services/cronometro-rodada';
 import { EvaluationStore } from '../../services/evaluation-store';
 
@@ -43,6 +45,8 @@ export class Evaluation implements OnDestroy {
   private readonly router = inject(Router);
   private readonly cronometro = inject(CronometroRodada);
   private readonly injector = inject(Injector);
+  private readonly api = inject(ApiRag);
+  private readonly sanitizer = inject(DomSanitizer);
 
   private readonly topo = viewChild<ElementRef<HTMLElement>>('topo');
   private readonly etapa = viewChild<ElementRef<HTMLElement>>('etapa');
@@ -63,6 +67,15 @@ export class Evaluation implements OnDestroy {
   protected readonly erro = this.store.erro;
 
   protected readonly documento = computed(() => this.store.getDocument(this.docId()));
+  /** Abre na mesma aba: em outra, a consulta sairia do tempo de leitura como tempo oculto. */
+  protected readonly pdfAberto = signal(false);
+  /** A URL é montada por `ApiRag` a partir do id do documento, nunca de texto do usuário. */
+  protected readonly urlDoPdf = computed(() => {
+    const documento = this.documento();
+    return documento?.pdfDisponivel
+      ? this.sanitizer.bypassSecurityTrustResourceUrl(this.api.urlDoPdf(documento.id))
+      : null;
+  });
   private readonly rounds = computed(() => this.store.rounds(this.docId()));
   protected readonly decididas = computed(() => this.rounds().filter((item) => item.escolhidoEm));
   protected readonly rodadaPendente = computed(() =>
@@ -149,6 +162,10 @@ export class Evaluation implements OnDestroy {
     }
   }
 
+  protected registrarVista(rotulo: RotuloCego): void {
+    this.cronometro.registrarVista(this.docId(), rotulo);
+  }
+
   protected async escolher(roundId: string, rotulo: RotuloCego | null): Promise<void> {
     // Um segundo clique antes da resposta do servidor viraria um 409 na tela.
     if (this.escolhendo) {
@@ -163,6 +180,10 @@ export class Evaluation implements OnDestroy {
     if (!this.erro()) {
       this.irParaOTopo();
     }
+  }
+
+  protected alternarPdf(): void {
+    this.pdfAberto.update((aberto) => !aberto);
   }
 
   protected irParaDocumentos(): void {

@@ -26,6 +26,8 @@ export interface RagDocument {
   area: string;
   descricao: string;
   icone: string;
+  /** Falso nos documentos enviados antes de o PDF passar a ser guardado. */
+  pdfDisponivel: boolean;
 }
 
 /** Uma resposta candidata, exibida sob um rótulo cego. */
@@ -67,4 +69,8 @@ export interface TemposDaRodada {
   totalMs: number;
   geracaoMs: number;
   ocultoMs: number;
+  perguntaMs?: number | null;
+  respostasVistas?: number | null;
+  recarregamentos?: number | null;
+  larguraTela?: number | null;
 }

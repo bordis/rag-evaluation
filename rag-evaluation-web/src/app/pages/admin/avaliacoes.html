@@ -31,7 +31,9 @@
         <td>{{ item.inicio | date: 'dd/MM/yy HH:mm' }}</td>
         <td>{{ item.fim | date: 'dd/MM/yy HH:mm' }}</td>
         <td>
-          <a [routerLink]="['/admin/avaliacoes', item.session_id, item.document_id]">Abrir</a>
+          <a class="adm-btn" [routerLink]="['/admin/avaliacoes', item.session_id, item.document_id]"
+            >Abrir</a
+          >
         </td>
       </tr>
     } @empty {

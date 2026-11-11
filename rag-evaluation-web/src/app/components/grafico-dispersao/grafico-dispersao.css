@@ -1,0 +1,45 @@
+svg {
+  display: block;
+  width: 100%;
+  max-width: 680px;
+  height: auto;
+}
+
+.grade {
+  stroke: var(--color-hairline-soft);
+}
+
+.referencia {
+  stroke: var(--color-muted);
+  stroke-width: 1.5;
+}
+
+.eixo {
+  fill: var(--color-muted);
+  font-size: 11px;
+}
+
+.rotulo {
+  fill: var(--color-ink);
+  font-size: 12px;
+  font-weight: 600;
+  /* Halo: o traço de outro pipeline não corta o rótulo. */
+  paint-order: stroke;
+  stroke: var(--color-canvas);
+  stroke-width: 3px;
+}
+
+.intervalo {
+  stroke: var(--grafico-1-suave);
+  stroke-width: 3;
+}
+
+.alvo {
+  fill: transparent;
+}
+
+.ponto {
+  fill: var(--grafico-1);
+  stroke: var(--color-canvas);
+  stroke-width: 2;
+}

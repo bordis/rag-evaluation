@@ -1,0 +1,52 @@
+<svg
+  [attr.viewBox]="'0 0 ' + largura + ' ' + altura"
+  role="img"
+  [attr.aria-label]="'Taxa de vitória em função de: ' + rotuloX()"
+>
+  @for (grade of desenho().gradesY; track grade.y) {
+    <line
+      class="grade"
+      [attr.x1]="esquerda"
+      [attr.x2]="limiteDireito"
+      [attr.y1]="grade.y"
+      [attr.y2]="grade.y"
+    />
+    <text class="eixo" [attr.x]="esquerda - 6" [attr.y]="grade.y + 3" text-anchor="end">
+      {{ grade.rotulo }}
+    </text>
+  }
+  @for (marca of desenho().marcasX; track marca.x) {
+    <text class="eixo" [attr.x]="marca.x" [attr.y]="limiteBase + 15" text-anchor="middle">
+      {{ marca.rotulo }}
+    </text>
+  }
+  <text class="eixo" [attr.x]="centroX" [attr.y]="limiteBase + 32" text-anchor="middle">
+    {{ rotuloX() }}
+  </text>
+  @if (desenho().referenciaY; as y) {
+    <line
+      class="referencia"
+      [attr.x1]="esquerda"
+      [attr.x2]="limiteDireito"
+      [attr.y1]="y"
+      [attr.y2]="y"
+    />
+  }
+  @for (ponto of desenho().pontos; track ponto.rotulo) {
+    <g>
+      <title>{{ ponto.dica }}</title>
+      @if (ponto.baixo !== null && ponto.alto !== null) {
+        <line
+          class="intervalo"
+          [attr.x1]="ponto.cx"
+          [attr.x2]="ponto.cx"
+          [attr.y1]="ponto.baixo"
+          [attr.y2]="ponto.alto"
+        />
+      }
+      <circle class="alvo" [attr.cx]="ponto.cx" [attr.cy]="ponto.cy" r="14" />
+      <circle class="ponto" [attr.cx]="ponto.cx" [attr.cy]="ponto.cy" r="5" />
+      <text class="rotulo" [attr.x]="ponto.cx + 9" [attr.y]="ponto.cy + 4">{{ ponto.rotulo }}</text>
+    </g>
+  }
+</svg>

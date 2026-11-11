@@ -20,6 +20,7 @@ interface DocumentoDTO {
   area: string;
   descricao: string;
   icone: string;
+  pdf_disponivel: boolean;
 }
 
 interface RespostaDTO {
@@ -93,7 +94,15 @@ export class ApiRag {
     const documentos = await this.executar(
       this.http.get<DocumentoDTO[]>(`${this.base}/documents`, { params: { status: 'pronto' } }),
     );
-    return documentos.map((item) => ({ ...item }));
+    return documentos.map(({ pdf_disponivel, ...item }) => ({
+      ...item,
+      pdfDisponivel: pdf_disponivel,
+    }));
+  }
+
+  /** O navegador abre esta URL direto no visualizador de PDF dele. */
+  urlDoPdf(documentId: string): string {
+    return `${this.base}/documents/${documentId}/arquivo`;
   }
 
   async obterProgresso(sessionId: string): Promise<ProgressoSessao> {
@@ -140,6 +149,10 @@ export class ApiRag {
         tempo_total_ms: tempos?.totalMs ?? null,
         tempo_geracao_ms: tempos?.geracaoMs ?? null,
         tempo_oculto_ms: tempos?.ocultoMs ?? null,
+        tempo_pergunta_ms: tempos?.perguntaMs ?? null,
+        respostas_vistas: tempos?.respostasVistas ?? null,
+        recarregamentos: tempos?.recarregamentos ?? null,
+        largura_tela: tempos?.larguraTela ?? null,
       }),
     );
     return this.paraRodada(rodada);

@@ -14,6 +14,27 @@
 
   @if (dados.rodadas.length === 0) {
     <p>Este ciclo ainda não tem rodadas.</p>
+  } @else {
+    <table class="adm-tabela">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Pergunta</th>
+          <th>Escolha do avaliador</th>
+          <th>Melhor no RAGAS (média)</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (linha of comparacao(); track linha.id) {
+          <tr>
+            <td>{{ linha.ordem }}</td>
+            <td>{{ linha.pergunta }}</td>
+            <td>{{ linha.escolha }}</td>
+            <td>{{ linha.melhorNoRagas }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
   }
 
   <div class="adm-paginacao" role="group" aria-label="Perguntas">
@@ -60,6 +81,9 @@
           </h3>
           @if (resposta.escolhida) {
             <span class="adm-selo adm-selo--ok">Escolhida</span>
+          }
+          @if (melhorNoRagas(atual, resposta)) {
+            <span class="adm-selo">Melhor no RAGAS</span>
           }
         </header>
         <div class="md" [innerHTML]="resposta.texto | markdown"></div>
@@ -110,7 +134,7 @@
         </details>
 
         @for (etapa of etapas(resposta); track etapa.nome) {
-          <details [open]="etapa.nome === 'contexto_final'">
+          <details>
             <summary>{{ nomeEtapa(etapa.nome) }} ({{ etapa.chunks.length }})</summary>
             <table class="adm-tabela adm-tabela--interna">
               <thead>

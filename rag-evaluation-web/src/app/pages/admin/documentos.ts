@@ -69,6 +69,24 @@ export class AdminDocumentos implements OnDestroy {
     await this.atualizar();
   }
 
+  /** Documentos antigos não têm o arquivo; a API só aceita o mesmo PDF que foi ingerido. */
+  protected async anexarPdf(documento: DocumentoAdmin, evento: Event): Promise<void> {
+    const campo = evento.target as HTMLInputElement;
+    const arquivo = campo.files?.[0];
+    if (!arquivo) {
+      return;
+    }
+    this.erro.set(null);
+    try {
+      await this.api.anexarPdf(documento.id, arquivo);
+      await this.atualizar();
+    } catch (erro) {
+      this.erro.set((erro as Error).message);
+    } finally {
+      campo.value = '';
+    }
+  }
+
   protected async excluir(documento: DocumentoAdmin): Promise<void> {
     if (!confirm(`Excluir "${documento.titulo}" do acervo e do Milvus?`)) {
       return;

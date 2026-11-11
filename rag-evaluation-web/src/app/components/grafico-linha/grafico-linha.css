@@ -1,0 +1,50 @@
+.figura {
+  margin: 0;
+}
+
+figcaption {
+  margin-bottom: var(--space-xxs);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-body-strong);
+}
+
+svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.grade {
+  stroke: var(--color-hairline-soft);
+}
+
+.referencia {
+  stroke: var(--color-muted);
+  stroke-width: 1.5;
+}
+
+.eixo {
+  fill: var(--color-muted);
+  font-size: 10px;
+}
+
+.serie {
+  fill: none;
+  stroke: var(--grafico-1);
+  stroke-width: 2;
+}
+
+.alvo {
+  fill: transparent;
+}
+
+.ponto {
+  fill: var(--grafico-1);
+  stroke: var(--color-canvas);
+  stroke-width: 2;
+}
+
+g:hover .ponto {
+  fill: var(--color-primary-active);
+}

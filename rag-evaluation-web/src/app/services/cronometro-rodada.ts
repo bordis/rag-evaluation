@@ -8,6 +8,11 @@ interface EstadoCronometro {
   ocultoMs: number;
   /** Instante em que saiu da tela ou da aba; `null` enquanto está contando. */
   pausadoEm: number | null;
+  /** Do início até enviar a pergunta, sem o tempo oculto. */
+  perguntaMs?: number | null;
+  /** Rótulos das respostas que já apareceram na tela. */
+  vistas?: string[];
+  recarregamentos?: number;
 }
 
 const PREFIXO = 'rag-evaluation.cronometro.';
@@ -36,17 +41,41 @@ export class CronometroRodada {
 
   /** Começa a contar, ou volta a contar depois de uma pausa. */
   retomar(slug: string): void {
+    const slugAnterior = this.slugAtual;
     this.slugAtual = slug;
     const agora = Date.now();
+    // Sem cronômetro ativo nesta carga da página e com estado salvo: o avaliador recarregou.
+    const voltou = slugAnterior !== slug;
     const estado = this.lerEstado(slug);
     if (!estado) {
       this.gravar(slug, { inicio: agora, geracaoMs: 0, ocultoMs: 0, pausadoEm: null });
-    } else if (estado.pausadoEm !== null) {
+    } else if (estado.pausadoEm !== null || voltou) {
       this.gravar(slug, {
         ...estado,
-        ocultoMs: estado.ocultoMs + (agora - estado.pausadoEm),
+        ocultoMs: estado.ocultoMs + (estado.pausadoEm === null ? 0 : agora - estado.pausadoEm),
         pausadoEm: null,
+        recarregamentos: (estado.recarregamentos ?? 0) + (voltou ? 1 : 0),
       });
+    }
+  }
+
+  /** Chamado ao enviar a pergunta: o resto da rodada é espera, leitura e decisão. */
+  registrarPergunta(slug: string): void {
+    const estado = this.lerEstado(slug);
+    if (estado) {
+      const agora = Date.now();
+      const pausa = estado.pausadoEm === null ? 0 : agora - estado.pausadoEm;
+      this.gravar(slug, {
+        ...estado,
+        perguntaMs: Math.max(0, agora - estado.inicio - estado.ocultoMs - pausa),
+      });
+    }
+  }
+
+  registrarVista(slug: string, rotulo: string): void {
+    const estado = this.lerEstado(slug);
+    if (estado && !estado.vistas?.includes(rotulo)) {
+      this.gravar(slug, { ...estado, vistas: [...(estado.vistas ?? []), rotulo] });
     }
   }
 
@@ -79,6 +108,12 @@ export class CronometroRodada {
       totalMs: agora - estado.inicio,
       geracaoMs: estado.geracaoMs,
       ocultoMs: estado.ocultoMs + pausa,
+      perguntaMs: estado.perguntaMs ?? null,
+      // Sem o observador não há medição, o que é diferente de nenhuma resposta vista.
+      respostasVistas:
+        typeof IntersectionObserver === 'undefined' ? null : (estado.vistas?.length ?? 0),
+      recarregamentos: estado.recarregamentos ?? 0,
+      larguraTela: typeof window === 'undefined' ? null : window.innerWidth,
     };
   }
 

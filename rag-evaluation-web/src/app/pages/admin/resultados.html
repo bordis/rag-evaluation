@@ -10,18 +10,6 @@
 
 <div class="adm-acoes">
   <a class="adm-btn" [href]="urlCsv()">Exportar CSV</a>
-  <button
-    class="adm-btn"
-    type="button"
-    [disabled]="disparando() || ragas()?.em_andamento"
-    (click)="calcularRagas()"
-  >
-    @if (ragas()?.em_andamento) {
-      Calculando RAGAS…
-    } @else {
-      Calcular RAGAS do estudo (gasta créditos)
-    }
-  </button>
   <button class="adm-btn" type="button" [disabled]="atualizando()" (click)="carregar()">
     @if (atualizando()) {
       Atualizando…
@@ -34,312 +22,1293 @@
   }
 </div>
 
-@if (ragas(); as situacao) {
-  <section class="adm-cartao" aria-labelledby="ragas-andamento">
-    <strong id="ragas-andamento">
-      @if (situacao.em_andamento) {
-        Calculando RAGAS: {{ situacao.avaliadas + situacao.com_erro }} de {{ situacao.total }}
-        respostas processadas
-      } @else if (situacao.total === 0) {
-        RAGAS: ainda não há rodadas decididas para calcular
-      } @else {
-        RAGAS: {{ situacao.avaliadas }} de {{ situacao.total }} respostas com nota
-      }
-    </strong>
-    @if (situacao.em_andamento) {
-      <progress
-        class="adm-progresso"
-        aria-labelledby="ragas-andamento"
-        [max]="situacao.total"
-        [value]="situacao.avaliadas + situacao.com_erro"
-      ></progress>
-    }
-    @if (situacao.com_erro > 0) {
-      <p class="adm-erro">
-        Respostas com falha: {{ situacao.com_erro }}. Último erro: {{ situacao.ultimo_erro }}
-        @if (!situacao.em_andamento) {
-          <br />
-          Clique em "Calcular RAGAS do estudo" para repetir só as que falharam.
-        }
-      </p>
-    }
-  </section>
-}
+<nav class="abas" aria-label="Seções dos resultados">
+  @for (item of abas; track item.id) {
+    <a
+      class="aba"
+      [class.aba--ativa]="abaAtiva() === item.id"
+      [attr.aria-current]="abaAtiva() === item.id ? 'page' : null"
+      routerLink="."
+      [queryParams]="{ aba: item.id }"
+      >{{ item.rotulo }}</a
+    >
+  }
+</nav>
 
 @if (dados(); as stats) {
-  <p>
-    {{ stats.rodadas_decididas }} rodadas decididas · {{ stats.avaliadores }} avaliadores · "nenhuma
-    está correta" em {{ stats.nenhuma.sucessos }} ({{ stats.nenhuma.taxa ?? 0 | percent: '1.1-1' }})
-  </p>
+  @switch (abaAtiva()) {
+    @case ('panorama') {
+      <div class="numeros">
+        <div class="numero">
+          <strong>{{ stats.rodadas_decididas }}</strong>
+          <span>rodadas decididas</span>
+          <small
+            >previstas: {{ stats.amostra.meta_rodadas[0] }} a
+            {{ stats.amostra.meta_rodadas[1] }}</small
+          >
+        </div>
+        <div class="numero">
+          <strong>{{ stats.avaliadores }}</strong>
+          <span>avaliadores</span>
+          <small
+            >previstos: {{ stats.amostra.meta_avaliadores[0] }} a
+            {{ stats.amostra.meta_avaliadores[1] }}</small
+          >
+        </div>
+        <div class="numero">
+          <strong>{{ stats.amostra.documentos }}</strong>
+          <span>documentos</span>
+          <small
+            >{{ stats.amostra.ciclos_completos }} de {{ stats.amostra.ciclos }} ciclos
+            completos</small
+          >
+        </div>
+        <div class="numero">
+          <strong>{{ pct(stats.nenhuma.taxa) }}</strong>
+          <span>"nenhuma está correta"</span>
+          <small>{{ stats.nenhuma.sucessos }} rodadas</small>
+        </div>
+      </div>
 
-  <h2 class="adm-subtitulo">Taxa de vitória (acaso: {{ stats.acaso | percent }})</h2>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Pipeline</th>
-        <th>Vitórias</th>
-        <th>Taxa</th>
-        <th>IC 95% (Wilson)</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (item of stats.por_pipeline; track item.codigo) {
-        <tr>
-          <td>{{ item.codigo }}</td>
-          <td>{{ item.sucessos }} / {{ item.total }}</td>
-          <td>{{ item.taxa ?? 0 | percent: '1.1-1' }}</td>
-          <td>{{ intervalo(item.ic95) }}</td>
-        </tr>
+      @if (alertas().length) {
+        <section class="alertas" aria-label="Pontos de atenção">
+          <h2>Pontos de atenção</h2>
+          <ul>
+            @for (alerta of alertas(); track alerta.texto) {
+              <li>
+                {{ alerta.texto }}
+                <a class="adm-btn" routerLink="." [queryParams]="{ aba: alerta.aba }">Ver</a>
+              </li>
+            }
+          </ul>
+        </section>
       }
-    </tbody>
-  </table>
 
-  <h2 class="adm-subtitulo">Efeitos do desenho 2×2 (hipótese nula: 50%)</h2>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Efeito</th>
-        <th>Rodadas</th>
-        <th>Taxa</th>
-        <th>IC 95% (Wilson)</th>
-        <th>IC 95% (bootstrap por avaliador)</th>
-        <th>p (binomial exato)</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (item of stats.efeitos; track item.efeito) {
-        <tr>
-          <td>{{ item.descricao }}</td>
-          <td>{{ item.sucessos }} / {{ item.total }}</td>
-          <td>{{ item.taxa ?? 0 | percent: '1.1-1' }}</td>
-          <td>{{ intervalo(item.ic95) }}</td>
-          <td>{{ intervalo(item.ic95_bootstrap) }}</td>
-          <td>{{ item.p_valor === null ? '—' : (item.p_valor | number: '1.3-3') }}</td>
-        </tr>
-      }
-    </tbody>
-  </table>
+      <app-analise-cartao titulo="O que os dados dizem até agora" [ajuda]="ajuda.perguntas">
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pergunta</th>
+                <th>Leitura</th>
+                <th>Com base em</th>
+                <th><span class="visualmente-oculto">Detalhes</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (linha of leituras(); track linha.pergunta) {
+                <tr>
+                  <td>{{ linha.pergunta }}</td>
+                  <td>
+                    <strong>{{ linha.veredito }}</strong>
+                  </td>
+                  <td>{{ linha.detalhe }}</td>
+                  <td>
+                    <a class="adm-btn" routerLink="." [queryParams]="{ aba: linha.aba }">Abrir</a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
 
-  <h2 class="adm-subtitulo">Viés de posição</h2>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Posição exibida</th>
-        <th>Escolhas</th>
-        <th>Taxa</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (item of stats.por_posicao; track item.posicao) {
-        <tr>
-          <td>{{ item.posicao }}</td>
-          <td>{{ item.sucessos }} / {{ item.total }}</td>
-          <td>{{ item.taxa ?? 0 | percent: '1.1-1' }}</td>
-        </tr>
-      }
-    </tbody>
-  </table>
-
-  <h2 class="adm-subtitulo">Tempo e fadiga por ordem da rodada</h2>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Ordem</th>
-        <th>Rodadas</th>
-        <th>"Nenhuma"</th>
-        <th>Tempo ativo mediano</th>
-        <th>Escolheu a posição 1</th>
-        <th>Escolheu recuperação avançada</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (item of stats.por_ordem; track item.ordem) {
-        <tr>
-          <td>{{ item.ordem }}</td>
-          <td>{{ item.rodadas }}</td>
-          <td>{{ item.nenhuma }}</td>
-          <td>
-            {{
-              item.tempo_ativo_mediano_ms === null
-                ? '—'
-                : (item.tempo_ativo_mediano_ms / 1000 | number: '1.1-1') + ' s'
-            }}
-          </td>
-          <td>{{ item.taxa_posicao_1 === null ? '—' : (item.taxa_posicao_1 | percent) }}</td>
-          <td>{{ item.taxa_avancado === null ? '—' : (item.taxa_avancado | percent) }}</td>
-        </tr>
-      }
-    </tbody>
-  </table>
-
-  <h2 class="adm-subtitulo">Por documento</h2>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Documento</th>
-        <th>Rodadas</th>
-        <th>"Nenhuma"</th>
-        @for (item of stats.por_pipeline; track item.codigo) {
-          <th>{{ item.codigo }}</th>
-        }
-      </tr>
-    </thead>
-    <tbody>
-      @for (documento of stats.por_documento; track documento.documento) {
-        <tr>
-          <td>{{ documento.documento }}</td>
-          <td>{{ documento.rodadas }}</td>
-          <td>{{ documento.nenhuma }}</td>
-          @for (item of stats.por_pipeline; track item.codigo) {
-            <td>{{ documento.vitorias[item.codigo] }}</td>
-          }
-        </tr>
-      }
-    </tbody>
-  </table>
-
-  <h2 class="adm-subtitulo">Custo por resposta</h2>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Pipeline</th>
-        <th>Respostas</th>
-        <th>Latência p50</th>
-        <th>Latência p95</th>
-        <th>Tokens (média)</th>
-        <th>US$ (média)</th>
-        <th>US$ (total)</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (item of stats.custo.por_pipeline; track item.codigo) {
-        <tr>
-          <td>{{ item.codigo }}</td>
-          <td>{{ item.respostas }}</td>
-          <td>{{ item.ms_p50 ?? 0 | number: '1.0-0' }} ms</td>
-          <td>{{ item.ms_p95 ?? 0 | number: '1.0-0' }} ms</td>
-          <td>{{ item.tokens_medio ?? 0 | number: '1.0-0' }}</td>
-          <td>{{ item.usd_medio ?? 0 | number: '1.5-5' }}</td>
-          <td>{{ item.usd_total | number: '1.4-4' }}</td>
-        </tr>
-      }
-    </tbody>
-  </table>
-  <p class="adm-pequeno">Não inclui a descrição de imagens na ingestão.</p>
-
-  <details>
-    <summary>Custo por etapa</summary>
-    <table class="adm-tabela">
-      <thead>
-        <tr>
-          <th>Pipeline</th>
-          <th>Etapa</th>
-          <th>Execuções</th>
-          <th>p50 (ms)</th>
-          <th>p95 (ms)</th>
-          <th>Tokens</th>
-          <th>US$</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (item of stats.custo.por_etapa; track item.codigo + item.etapa) {
-          <tr>
-            <td>{{ item.codigo }}</td>
-            <td>{{ item.etapa }}</td>
-            <td>{{ item.execucoes }}</td>
-            <td>{{ item.ms_p50 ?? 0 | number: '1.0-0' }}</td>
-            <td>{{ item.ms_p95 ?? 0 | number: '1.0-0' }}</td>
-            <td>{{ item.tokens_medio === null ? '—' : (item.tokens_medio | number: '1.0-0') }}</td>
-            <td>{{ item.usd_medio === null ? '—' : (item.usd_medio | number: '1.5-5') }}</td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </details>
-
-  <details>
-    <summary>Ingestão (acervo inteiro)</summary>
-    <table class="adm-tabela">
-      <thead>
-        <tr>
-          <th>Pipeline</th>
-          <th>Documentos</th>
-          <th>Parsing (ms, média)</th>
-          <th>Total (ms, média)</th>
-          <th>Chunks (média)</th>
-          <th>Tokens de embedding</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (item of stats.custo.ingestao; track item.codigo) {
-          <tr>
-            <td>{{ item.codigo }}</td>
-            <td>{{ item.documentos }}</td>
-            <td>{{ item.parsing_ms_medio | number: '1.0-0' }}</td>
-            <td>{{ item.total_ms_medio | number: '1.0-0' }}</td>
-            <td>{{ item.chunks_medio | number: '1.0-1' }}</td>
-            <td>{{ item.tokens_embedding_total }}</td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  </details>
-
-  <h2 class="adm-subtitulo">RAGAS × escolha humana</h2>
-  <p>
-    {{ stats.ragas.respostas_avaliadas }} respostas com nota. Concordância: em quantas rodadas o
-    pipeline de maior nota foi o escolhido pelo avaliador.
-    @if (stats.ragas.kendall_tau_ordenacao !== null) {
-      Tau de Kendall da ordenação agregada, apenas descritivo com 4 itens:
-      {{ stats.ragas.kendall_tau_ordenacao | number: '1.2-2' }}.
+      <app-analise-cartao titulo="Taxa de vitória dos pipelines" [ajuda]="ajuda.vitoria">
+        <app-grafico-intervalos
+          [linhas]="linhasVitoria()"
+          [referencia]="stats.acaso"
+          rotuloReferencia="Acaso: 25%"
+        />
+      </app-analise-cartao>
     }
-  </p>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Métrica</th>
-        <th>Rodadas</th>
-        <th>Concordância</th>
-        <th>Acaso</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (item of stats.ragas.concordancia; track item.metrica) {
-        <tr>
-          <td>{{ item.metrica }}</td>
-          <td>{{ item.rodadas }}</td>
-          <td>{{ item.concordancia === null ? '—' : (item.concordancia | percent: '1.1-1') }}</td>
-          <td>{{ item.acaso | percent }}</td>
-        </tr>
+
+    @case ('preferencia') {
+      <app-analise-cartao
+        titulo="Taxa de vitória dos pipelines"
+        subtitulo="Entre as rodadas com vencedor"
+        [ajuda]="ajuda.vitoria"
+      >
+        <app-grafico-intervalos
+          [linhas]="linhasVitoria()"
+          [referencia]="stats.acaso"
+          rotuloReferencia="Acaso: 25%. Traço: IC 95% (Wilson)."
+        />
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Vitórias</th>
+                <th>Taxa</th>
+                <th>IC 95%</th>
+                <th>Faixa de posição</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.por_pipeline; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ item.sucessos }} / {{ item.total }}</td>
+                  <td>{{ pct(item.taxa) }}</td>
+                  <td>{{ ic(item.ic95) }}</td>
+                  <td>
+                    @if (item.faixa_posicao; as faixa) {
+                      @if (faixa[0] === faixa[1]) {
+                        {{ faixa[0] }}º
+                      } @else {
+                        {{ faixa[0] }}º a {{ faixa[1] }}º
+                      }
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Efeitos da ingestão, da recuperação e interação"
+        subtitulo="Hipóteses H1 a H3, contra 50%"
+        [ajuda]="ajuda.efeitos"
+      >
+        <app-grafico-intervalos
+          [linhas]="linhasEfeitos()"
+          [referencia]="0.5"
+          rotuloReferencia="Sem efeito: 50%. Traço: IC 95% por bootstrap de avaliadores."
+        />
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Efeito</th>
+                <th>Rodadas</th>
+                <th>Taxa</th>
+                <th>Pontos acima de 50</th>
+                <th>Razão de chances</th>
+                <th>IC 95%: avaliadores</th>
+                <th>IC 95%: documentos</th>
+                <th>p</th>
+                <th>p (Holm)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.efeitos; track item.efeito) {
+                <tr>
+                  <td>{{ efeitoRotulo(item.efeito) }}</td>
+                  <td>{{ item.sucessos }} / {{ item.total }}</td>
+                  <td>{{ pct(item.taxa) }}</td>
+                  <td>{{ sinal(item.pontos_acima_de_50) }}</td>
+                  <td>{{ num(item.razao_chances, 2) }}</td>
+                  <td>{{ ic(item.ic95_bootstrap) }}</td>
+                  <td>{{ ic(item.ic95_bootstrap_documento) }}</td>
+                  <td>{{ p(item.p_valor) }}</td>
+                  <td>
+                    <strong [class.nao-destaca]="!significativo(item.p_holm)">{{
+                      p(item.p_holm)
+                    }}</strong>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Comparações em que só um fator muda"
+        subtitulo="Mostra em que sentido vai a interação"
+        [ajuda]="ajuda.simples"
+      >
+        <app-grafico-intervalos
+          [linhas]="linhasSimples()"
+          [referencia]="0.5"
+          rotuloReferencia="Empate: 50%. Traço: IC 95% por bootstrap de avaliadores."
+        />
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Comparação</th>
+                <th>Fator isolado</th>
+                <th>Vitórias do primeiro</th>
+                <th>Taxa</th>
+                <th>IC 95%: avaliadores</th>
+                <th>p (Bonferroni)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.comparacoes_simples; track item.a_favor + item.contra) {
+                <tr>
+                  <td>{{ curto(item.a_favor) }} × {{ curto(item.contra) }}</td>
+                  <td>{{ efeitoRotulo(item.fator) }} {{ item.condicao }}</td>
+                  <td>{{ item.sucessos }} / {{ item.total }}</td>
+                  <td>{{ pct(item.taxa) }}</td>
+                  <td>{{ ic(item.ic95_bootstrap) }}</td>
+                  <td>{{ p(item.p_bonferroni) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Modelo misto"
+        subtitulo="A análise confirmatória, em R"
+        [ajuda]="ajuda.modelo"
+      >
+        <p>Exporte o CSV acima e rode, na pasta <code>rag-evaluation-api</code>:</p>
+        <pre class="comando"><code>Rscript analise/modelo_misto.R estudo.csv</code></pre>
+        <p class="adm-pequeno">Precisa do R com o pacote lme4. Esta tela não ajusta o modelo.</p>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Respostas consideradas incorretas"
+        subtitulo="Rodadas em que o avaliador recusou as quatro respostas"
+        [ajuda]="ajuda.nenhuma"
+      >
+        <p class="destaque">
+          <strong>{{ pct(stats.nenhuma.taxa) }}</strong>
+          <span>
+            {{ stats.nenhuma.sucessos }} de {{ stats.nenhuma.total }} rodadas · IC 95% por
+            avaliadores:
+            {{ ic(stats.nenhuma.ic95_bootstrap) }}
+          </span>
+        </p>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Resultado por documento"
+        subtitulo="Descritivo: poucas rodadas em cada um"
+        [ajuda]="ajuda.documento"
+      >
+        @if (stats.por_documento.length) {
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Documento</th>
+                  <th>Rodadas</th>
+                  <th>Avaliadores</th>
+                  <th>"Nenhuma"</th>
+                  @for (item of stats.por_pipeline; track item.codigo) {
+                    <th>{{ curto(item.codigo) }}</th>
+                  }
+                  <th>Docling</th>
+                  <th>Avançada</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (documento of stats.por_documento; track documento.documento) {
+                  <tr>
+                    <td>{{ documento.documento }}</td>
+                    <td>{{ documento.rodadas }}</td>
+                    <td>{{ documento.avaliadores }}</td>
+                    <td>{{ documento.nenhuma }}</td>
+                    @for (item of stats.por_pipeline; track item.codigo) {
+                      <td
+                        class="celula"
+                        [style.background-color]="intensidade(documento.vitorias[item.codigo])"
+                      >
+                        {{ documento.vitorias[item.codigo] }}
+                      </td>
+                    }
+                    <td>{{ pct(documento.taxa_docling, 0) }}</td>
+                    <td>{{ pct(documento.taxa_avancado, 0) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="vazio">Ainda sem rodadas decididas.</p>
+        }
+      </app-analise-cartao>
+    }
+
+    @case ('validade') {
+      <app-analise-cartao titulo="Caracterização da amostra" [ajuda]="ajuda.amostra">
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <tbody>
+              <tr>
+                <th scope="row">Avaliadores</th>
+                <td>
+                  {{ stats.avaliadores }} (previstos: {{ stats.amostra.meta_avaliadores[0] }} a
+                  {{ stats.amostra.meta_avaliadores[1] }})
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Rodadas decididas</th>
+                <td>
+                  {{ stats.rodadas_decididas }} (previstas: {{ stats.amostra.meta_rodadas[0] }} a
+                  {{ stats.amostra.meta_rodadas[1] }})
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Rodadas com vencedor</th>
+                <td>{{ stats.rodadas_decididas - stats.nenhuma.sucessos }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Documentos e ciclos</th>
+                <td>
+                  documentos: {{ stats.amostra.documentos }}; ciclos completos:
+                  {{ stats.amostra.ciclos_completos }} de {{ stats.amostra.ciclos }}
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Rodadas por avaliador</th>
+                <td>
+                  mínimo {{ num(stats.amostra.rodadas_por_avaliador_min) }}, mediana
+                  {{ num(stats.amostra.rodadas_por_avaliador_mediana, 1) }}, máximo
+                  {{ num(stats.amostra.rodadas_por_avaliador_max) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Poder estatístico"
+        subtitulo="Para efeitos plausíveis, nunca para o efeito observado"
+        [ajuda]="ajuda.poder"
+      >
+        @if (stats.poder; as poder) {
+          <p class="destaque">
+            <strong>{{ pct(poder.taxa_minima_detectavel, 1) }}</strong>
+            <span>
+              menor taxa real detectável com 80% de poder, em {{ poder.rodadas }} rodadas com
+              vencedor
+            </span>
+          </p>
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Se a taxa real fosse</th>
+                  <th>Poder</th>
+                  <th>Exagero esperado de um resultado significativo</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of poder.cenarios; track item.taxa_real) {
+                  <tr>
+                    <td>{{ pct(item.taxa_real, 0) }}</td>
+                    <td>{{ pct(item.poder, 0) }}</td>
+                    <td>{{ vezes(item.exagero) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="vazio">Ainda sem rodadas com vencedor.</p>
+        }
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Viés de posição"
+        subtitulo="A posição exibida influenciou a escolha?"
+        [ajuda]="ajuda.posicao"
+      >
+        <app-grafico-intervalos
+          [linhas]="linhasPosicao()"
+          [referencia]="stats.acaso"
+          rotuloReferencia="Acaso: 25%. Traço: IC 95% (Wilson)."
+        />
+        @if (stats.teste_posicao; as teste) {
+          <p class="adm-pequeno">
+            Qui-quadrado de aderência: {{ num(teste.qui2, 2) }} com {{ teste.gl }} graus de
+            liberdade; p = {{ p(teste.p_valor) }}.
+          </p>
+        }
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Equilíbrio do sorteio"
+        subtitulo="Vezes que cada pipeline apareceu em cada posição"
+        [ajuda]="ajuda.sorteio"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Posição 1</th>
+                <th>Posição 2</th>
+                <th>Posição 3</th>
+                <th>Posição 4</th>
+                <th>p</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.balanceamento; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  @for (contagem of item.posicoes; track $index) {
+                    <td>{{ contagem }}</td>
+                  }
+                  <td>{{ p(item.teste?.p_valor) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Tempo e fadiga ao longo do ciclo"
+        subtitulo="Pela ordem da rodada, de 1 a 10"
+        [ajuda]="ajuda.fadiga"
+      >
+        @if (stats.por_ordem.length) {
+          <div class="pequenos-multiplos">
+            <app-grafico-linha
+              titulo="Tempo de leitura e decisão"
+              [pontos]="seriesFadiga().tempos"
+              [maximo]="seriesFadiga().maiorTempo"
+              [formatarEixo]="seriesFadiga().segundos"
+            />
+            <app-grafico-linha
+              titulo='"Nenhuma está correta"'
+              [pontos]="seriesFadiga().nenhuma"
+              [maximo]="1"
+              [formatarEixo]="seriesFadiga().porcento"
+            />
+            <app-grafico-linha
+              titulo="Escolheu a posição 1 (acaso: 25%)"
+              [pontos]="seriesFadiga().posicao"
+              [maximo]="1"
+              [referencia]="stats.acaso"
+              [formatarEixo]="seriesFadiga().porcento"
+            />
+            <app-grafico-linha
+              titulo="Escolheu recuperação avançada (sem efeito: 50%)"
+              [pontos]="seriesFadiga().avancada"
+              [maximo]="1"
+              [referencia]="0.5"
+              [formatarEixo]="seriesFadiga().porcento"
+            />
+          </div>
+
+          @if (stats.metades; as metades) {
+            <h3 class="adm-subtitulo">Início × fim do ciclo</h3>
+            <div class="adm-rolagem">
+              <table class="adm-tabela">
+                <thead>
+                  <tr>
+                    <th>Medida</th>
+                    <th>Rodadas 1 a 5</th>
+                    <th>Rodadas 6 a 10</th>
+                    <th>p</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Tempo de leitura e decisão</td>
+                    <td>{{ segundos(metades.tempo_ativo_inicio_ms) }}</td>
+                    <td>{{ segundos(metades.tempo_ativo_fim_ms) }}</td>
+                    <td>—</td>
+                  </tr>
+                  @for (item of metades.proporcoes; track item.metrica) {
+                    <tr>
+                      <td>{{ proporcaoRotulo(item.metrica) }}</td>
+                      <td>{{ pct(item.inicio) }}</td>
+                      <td>{{ pct(item.fim) }}</td>
+                      <td>{{ p(item.p_valor) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+
+          <details>
+            <summary>Tabela por ordem da rodada</summary>
+            <div class="adm-rolagem">
+              <table class="adm-tabela">
+                <thead>
+                  <tr>
+                    <th>Ordem</th>
+                    <th>Rodadas</th>
+                    <th>"Nenhuma"</th>
+                    <th>Leitura e decisão: p25</th>
+                    <th>Mediana</th>
+                    <th>p75</th>
+                    <th>ms por mil caracteres</th>
+                    <th>Posição 1</th>
+                    <th>Avançada</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of stats.por_ordem; track item.ordem) {
+                    <tr>
+                      <td>{{ item.ordem }}</td>
+                      <td>{{ item.rodadas }}</td>
+                      <td>{{ item.nenhuma }}</td>
+                      <td>{{ segundos(item.tempo_ativo_p25_ms) }}</td>
+                      <td>{{ segundos(item.tempo_ativo_mediano_ms) }}</td>
+                      <td>{{ segundos(item.tempo_ativo_p75_ms) }}</td>
+                      <td>{{ num(item.ms_por_mil_caracteres) }}</td>
+                      <td>{{ pct(item.taxa_posicao_1, 0) }}</td>
+                      <td>{{ pct(item.taxa_avancado, 0) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </details>
+        } @else {
+          <p class="vazio">Ainda sem rodadas decididas.</p>
+        }
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Tamanho das respostas"
+        subtitulo="A resposta mais longa ganha mais?"
+        [ajuda]="ajuda.tamanho"
+      >
+        <p class="destaque">
+          <strong>{{ pct(stats.vies_tamanho.taxa) }}</strong>
+          <span>
+            das {{ stats.vies_tamanho.total }} rodadas foram vencidas pela resposta mais longa
+            (acaso: 25%; p = {{ p(stats.vies_tamanho.p_valor) }})
+          </span>
+        </p>
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Caracteres por resposta (média)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.vies_tamanho.por_pipeline; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ num(item.caracteres_medio) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="O que pode ter atrapalhado a escolha"
+        subtitulo="Registrado durante a coleta"
+        [ajuda]="ajuda.coleta"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <tbody>
+              <tr>
+                <th scope="row">Viram as quatro respostas antes de escolher</th>
+                <td>
+                  {{ pct(stats.coleta.viu_todas.taxa) }} ({{ stats.coleta.viu_todas.sucessos }} de
+                  {{ stats.coleta.viu_todas.total }} rodadas medidas)
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Tempo escrevendo a pergunta (mediana)</th>
+                <td>{{ segundos(stats.coleta.tempo_pergunta_mediano_ms) }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Rodadas em que a página foi recarregada</th>
+                <td>{{ stats.coleta.rodadas_recarregadas }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Perguntas que falharam e não viraram rodada</th>
+                <td>{{ stats.coleta.falhas_de_rodada }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Respostas cortadas pelo limite de tokens</th>
+                <td>
+                  @for (item of stats.coleta.truncadas_por_pipeline; track item.codigo) {
+                    {{ curto(item.codigo) }}: {{ item.respostas }}{{ $last ? '' : ' · ' }}
+                  }
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Configuração congelada do estudo"
+        subtitulo="Como tudo estava ao abrir o estudo"
+        [ajuda]="ajuda.ambiente"
+      >
+        <details>
+          <summary>Ver modelos, prompts, preços e pipelines</summary>
+          <pre class="comando">{{ stats.ambiente | json }}</pre>
+        </details>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Confiabilidade"
+        subtitulo="Metades dos avaliadores chegam à mesma ordem?"
+        [ajuda]="ajuda.confiabilidade"
+      >
+        @if (stats.confiabilidade; as confiabilidade) {
+          <p class="destaque">
+            <strong>{{ num(confiabilidade.spearman_medio, 2) }}</strong>
+            <span>
+              Spearman médio em {{ confiabilidade.divisoes }} divisões · mesmo primeiro lugar em
+              {{ pct(confiabilidade.mesmo_primeiro, 0) }} delas
+            </span>
+          </p>
+        } @else {
+          <p class="vazio">Precisa de pelo menos 4 avaliadores com rodadas decididas.</p>
+        }
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Por avaliador"
+        subtitulo="Numerados: a sessão é anônima"
+        [ajuda]="ajuda.avaliadores"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Avaliador</th>
+                <th>Rodadas</th>
+                <th>Documentos</th>
+                <th>"Nenhuma"</th>
+                <th>Posição preferida</th>
+                <th>Leitura e decisão (mediana)</th>
+                <th>p ajustado</th>
+                <th>Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.por_avaliador; track item.avaliador) {
+                <tr>
+                  <td [title]="item.avaliador">Avaliador {{ item.numero }}</td>
+                  <td>{{ item.rodadas }}</td>
+                  <td>{{ item.documentos }}</td>
+                  <td>{{ item.nenhuma }}</td>
+                  <td>
+                    @if (item.posicao_preferida; as posicao) {
+                      {{ posicao }} ({{ pct(item.taxa_posicao_preferida, 0) }})
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td>{{ segundos(item.tempo_ativo_mediano_ms) }}</td>
+                  <td>{{ p(item.p_ajustado) }}</td>
+                  <td>
+                    @if (item.revisar) {
+                      <span class="adm-selo adm-selo--erro">Revisar</span>
+                    } @else {
+                      Sem alerta
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Contexto entregue ao modelo"
+        subtitulo="Checagem do experimento"
+        [ajuda]="ajuda.contexto"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Respostas</th>
+                <th>Chunks (média)</th>
+                <th>Caracteres (média)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.contexto.por_pipeline; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ item.respostas }}</td>
+                  <td>{{ num(item.chunks_medio, 1) }}</td>
+                  <td>{{ num(item.caracteres_medio) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <ul class="lista-simples">
+          @for (item of stats.contexto.sobreposicao; track item.a + item.b) {
+            <li>
+              Trechos em comum entre {{ curto(item.a) }} e {{ curto(item.b) }}:
+              <strong>{{ pct(item.jaccard_medio, 0) }}</strong> (Jaccard,
+              {{ item.rodadas }} rodadas)
+            </li>
+          }
+        </ul>
+      </app-analise-cartao>
+    }
+
+    @case ('ragas') {
+      @if (ragas(); as situacao) {
+        <section class="adm-cartao situacao" aria-labelledby="ragas-andamento">
+          <div>
+            <strong id="ragas-andamento">
+              @if (situacao.em_andamento) {
+                Calculando RAGAS: {{ situacao.avaliadas + situacao.com_erro }} de
+                {{ situacao.total }} respostas processadas
+              } @else if (situacao.total === 0) {
+                RAGAS: ainda não há rodadas decididas para calcular
+              } @else {
+                RAGAS: {{ situacao.avaliadas }} de {{ situacao.total }} respostas com nota
+              }
+            </strong>
+            @if (situacao.em_andamento) {
+              <progress
+                class="adm-progresso"
+                aria-labelledby="ragas-andamento"
+                [max]="situacao.total"
+                [value]="situacao.avaliadas + situacao.com_erro"
+              ></progress>
+            }
+            @if (situacao.com_erro > 0) {
+              <p class="adm-erro">
+                Respostas com falha: {{ situacao.com_erro }}. Último erro:
+                {{ situacao.ultimo_erro }}
+                @if (!situacao.em_andamento) {
+                  <br />
+                  Clique em "Calcular RAGAS do estudo" para repetir só as que falharam.
+                }
+              </p>
+            }
+          </div>
+          <button
+            class="adm-btn"
+            type="button"
+            [disabled]="disparando() || situacao.em_andamento"
+            (click)="calcularRagas()"
+          >
+            @if (situacao.em_andamento) {
+              Calculando RAGAS…
+            } @else {
+              Calcular RAGAS do estudo (gasta créditos)
+            }
+          </button>
+        </section>
       }
-    </tbody>
-  </table>
-  <table class="adm-tabela">
-    <thead>
-      <tr>
-        <th>Pipeline</th>
-        <th>Média</th>
-        <th>Fidelidade</th>
-        <th>Relevância</th>
-        <th>Precisão do contexto</th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (item of stats.ragas.media_por_pipeline; track item.codigo) {
-        <tr>
-          <td>{{ item.codigo }}</td>
-          <td>{{ item.media === null ? '—' : (item.media | number: '1.2-2') }}</td>
-          <td>{{ item.fidelidade === null ? '—' : (item.fidelidade | number: '1.2-2') }}</td>
-          <td>
-            {{
-              item.relevancia_resposta === null ? '—' : (item.relevancia_resposta | number: '1.2-2')
-            }}
-          </td>
-          <td>
-            {{ item.precisao_contexto === null ? '—' : (item.precisao_contexto | number: '1.2-2') }}
-          </td>
-        </tr>
-      }
-    </tbody>
-  </table>
+
+      <app-analise-cartao
+        titulo="O RAGAS aponta a mesma resposta que as pessoas?"
+        subtitulo="Rodada a rodada"
+        [ajuda]="ajuda.concordancia"
+      >
+        <app-grafico-intervalos
+          [linhas]="linhasConcordancia()"
+          [referencia]="stats.acaso"
+          rotuloReferencia="Acaso: 25%. Traço: IC 95% (Wilson)."
+        />
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Métrica</th>
+                <th>Rodadas</th>
+                <th>Concordância</th>
+                <th>IC 95%</th>
+                <th>p (contra 25%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.ragas.concordancia; track item.metrica) {
+                <tr>
+                  <td>{{ metrica(item.metrica) }}</td>
+                  <td>{{ item.rodadas }}</td>
+                  <td>{{ pct(item.concordancia) }}</td>
+                  <td>{{ ic(item.ic95) }}</td>
+                  <td>{{ p(item.p_valor) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Vitórias segundo cada juiz"
+        subtitulo="Nas mesmas rodadas"
+        [ajuda]="ajuda.vitoriasJuiz"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Pessoas</th>
+                <th>RAGAS (média)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.ragas.vitorias_comparadas; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ pct(item.humano) }}</td>
+                  <td>{{ pct(item.ragas) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="adm-pequeno">
+          Tau de Kendall da ordem agregada, só descritivo com 4 itens:
+          {{ num(stats.ragas.kendall_tau_ordenacao, 2) }}.
+        </p>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Concordância pela margem do RAGAS"
+        subtitulo="Vantagem da maior nota sobre a segunda"
+        [ajuda]="ajuda.margem"
+      >
+        @if (stats.ragas.por_margem.length) {
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Margem</th>
+                  <th>Rodadas</th>
+                  <th>Margem mediana</th>
+                  <th>Concordância</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of stats.ragas.por_margem; track item.faixa) {
+                  <tr>
+                    <td>{{ item.faixa === 'media' ? 'média' : item.faixa }}</td>
+                    <td>{{ item.rodadas }}</td>
+                    <td>{{ num(item.margem_mediana, 3) }}</td>
+                    <td>{{ pct(item.concordancia) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="vazio">Calcule o RAGAS para ver esta análise.</p>
+        }
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="O RAGAS enxerga os efeitos dos fatores?"
+        subtitulo="Diferença de nota dentro de cada rodada"
+        [ajuda]="ajuda.efeitosRagas"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Métrica</th>
+                <th>Docling</th>
+                <th>Recuperação avançada</th>
+                <th>Interação</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (linha of efeitosRagasPorMetrica(); track linha.metrica) {
+                <tr>
+                  <td>{{ metrica(linha.metrica) }}</td>
+                  @for (efeito of linha.efeitos; track $index) {
+                    <td>
+                      {{ sinal(efeito?.diferenca, 3) }}
+                      @if (excluiZero(efeito?.ic95_bootstrap)) {
+                        <strong> (≠ 0)</strong>
+                      }
+                    </td>
+                  }
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao titulo="Notas médias por pipeline" [ajuda]="ajuda.notas">
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Média</th>
+                <th>Fidelidade</th>
+                <th>Relevância</th>
+                <th>Precisão do contexto</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.ragas.media_por_pipeline; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ num(item.media, 2) }}</td>
+                  <td>{{ num(item.fidelidade, 2) }}</td>
+                  <td>{{ num(item.relevancia_resposta, 2) }}</td>
+                  <td>{{ num(item.precisao_contexto, 2) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="O RAGAS percebe quando tudo está errado?"
+        subtitulo="Melhor nota da rodada"
+        [ajuda]="ajuda.rejeitadas"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Rodadas</th>
+                <th>Quantidade</th>
+                <th>Melhor nota (média)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Com vencedor</td>
+                <td>{{ stats.ragas.rejeitadas.rodadas_decididas }}</td>
+                <td>{{ num(stats.ragas.rejeitadas.melhor_nota_decididas, 2) }}</td>
+              </tr>
+              <tr>
+                <td>"Nenhuma está correta"</td>
+                <td>{{ stats.ragas.rejeitadas.rodadas_rejeitadas }}</td>
+                <td>{{ num(stats.ragas.rejeitadas.melhor_nota_rejeitadas, 2) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+    }
+
+    @case ('custo') {
+      <app-analise-cartao
+        titulo="Vitórias × custo"
+        subtitulo="O canto superior esquerdo é o melhor negócio"
+        [ajuda]="ajuda.custoBeneficio"
+      >
+        @if (pontosCusto().length) {
+          <app-grafico-dispersao
+            [pontos]="pontosCusto()"
+            rotuloX="US$ por mil perguntas"
+            [referencia]="stats.acaso"
+            [formatarX]="formatarUsd"
+          />
+          <p class="adm-pequeno">Linha horizontal: acaso (25%). Traço vertical: IC 95%.</p>
+        }
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Taxa de vitória</th>
+                <th>Pontos sobre P1</th>
+                <th>US$ por mil perguntas</th>
+                <th>Custo × P1</th>
+                <th>Latência p50</th>
+                <th>Latência × P1</th>
+                <th>Tokens (média)</th>
+                <th>Dominado por</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.custo_beneficio; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ pct(item.taxa) }}</td>
+                  <td>{{ sinal(item.delta_pontos) }}</td>
+                  <td>{{ usd(item.usd_por_mil_perguntas, 2) }}</td>
+                  <td>{{ vezes(item.multiplo_usd) }}</td>
+                  <td>{{ segundos(item.ms_p50) }}</td>
+                  <td>{{ vezes(item.multiplo_latencia) }}</td>
+                  <td>{{ num(item.tokens_medio) }}</td>
+                  <td>
+                    @for (outro of item.dominado_por; track outro) {
+                      {{ curto(outro) }}{{ $last ? '' : ', ' }}
+                    } @empty {
+                      —
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Para onde vai o tempo de cada resposta"
+        subtitulo="Tempo médio por etapa"
+        [ajuda]="ajuda.custoEtapas"
+      >
+        <ul class="legenda" aria-label="Etapas">
+          @for (etapa of etapas; track etapa.id) {
+            <li>
+              <span class="amostra" [style.background-color]="etapa.cor"></span>{{ etapa.rotulo }}
+            </li>
+          }
+        </ul>
+        @for (linha of etapasPorPipeline(); track linha.codigo) {
+          <div class="barra-linha">
+            <span class="barra-rotulo">{{ curto(linha.codigo) }}</span>
+            <div class="barra">
+              @for (parte of linha.partes; track parte.id) {
+                <span
+                  class="segmento"
+                  [style.flex-grow]="parte.fracao"
+                  [style.background-color]="parte.cor"
+                  [title]="
+                    parte.rotulo + ': ' + segundos(parte.ms) + ' (' + pct(parte.fracao, 0) + ')'
+                  "
+                ></span>
+              }
+            </div>
+            <span class="barra-total">{{ segundos(linha.total) }}</span>
+          </div>
+        }
+        <details>
+          <summary>Tabela por etapa</summary>
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  <th>Etapa</th>
+                  <th>Execuções</th>
+                  <th>p50</th>
+                  <th>p95</th>
+                  <th>Tokens</th>
+                  <th>US$</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of stats.custo.por_etapa; track item.codigo + item.etapa) {
+                  <tr>
+                    <td>{{ curto(item.codigo) }}</td>
+                    <td>{{ item.etapa }}</td>
+                    <td>{{ item.execucoes }}</td>
+                    <td>{{ segundos(item.ms_p50) }}</td>
+                    <td>{{ segundos(item.ms_p95) }}</td>
+                    <td>{{ num(item.tokens_medio) }}</td>
+                    <td>{{ usd(item.usd_medio) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Custo por resposta"
+        subtitulo="Totais de geração do estudo"
+        [ajuda]="ajuda.custoBeneficio"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Respostas</th>
+                <th>Latência p50</th>
+                <th>Latência p95</th>
+                <th>p50 sem concorrência</th>
+                <th>Tokens (média)</th>
+                <th>US$ (média)</th>
+                <th>US$ (total)</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.custo.por_pipeline; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ item.respostas }}</td>
+                  <td>{{ segundos(item.ms_p50) }}</td>
+                  <td>{{ segundos(item.ms_p95) }}</td>
+                  <td>{{ segundos(item.ms_p50_sem_concorrencia) }}</td>
+                  <td>{{ num(item.tokens_medio) }}</td>
+                  <td>{{ usd(item.usd_medio) }}</td>
+                  <td>{{ usd(item.usd_total, 4) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Custo de preparar o acervo"
+        subtitulo="Acervo inteiro: o acervo é compartilhado entre estudos"
+        [ajuda]="ajuda.ingestao"
+      >
+        <div class="adm-rolagem">
+          <table class="adm-tabela">
+            <thead>
+              <tr>
+                <th>Pipeline</th>
+                <th>Documentos</th>
+                <th>Conversão (média)</th>
+                <th>Total (média)</th>
+                <th>Parte da conversão</th>
+                <th>Chunks (média)</th>
+                <th>Tokens de embedding</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of stats.custo.ingestao; track item.codigo) {
+                <tr>
+                  <td>{{ pipeline(item.codigo) }}</td>
+                  <td>{{ item.documentos }}</td>
+                  <td>{{ segundos(item.parsing_ms_medio) }}</td>
+                  <td>{{ segundos(item.total_ms_medio) }}</td>
+                  <td>{{ pct(item.parsing_participacao, 0) }}</td>
+                  <td>{{ num(item.chunks_medio, 1) }}</td>
+                  <td>{{ num(item.tokens_embedding_total) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </app-analise-cartao>
+    }
+
+    @case ('erros') {
+      <app-analise-cartao
+        titulo="Triagem das respostas recusadas"
+        subtitulo="Primeira hipótese da causa, em {{
+          stats.erros.rodadas
+        }} rodadas &quot;nenhuma&quot;"
+        [ajuda]="ajuda.erros"
+      >
+        @if (stats.erros.rodadas) {
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  @for (classe of classesErro; track classe.id) {
+                    <th>{{ classe.rotulo }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of stats.erros.por_pipeline; track item.codigo) {
+                  <tr>
+                    <td>{{ pipeline(item.codigo) }}</td>
+                    @for (classe of classesErro; track classe.id) {
+                      <td>{{ item[classe.id] }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="adm-subtitulo">Causas confirmadas por você</h3>
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  @for (causa of causasErro; track causa.id) {
+                    <th>{{ causa.rotulo }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of stats.erros.causas_confirmadas; track item.codigo) {
+                  <tr>
+                    <td>{{ pipeline(item.codigo) }}</td>
+                    @for (causa of causasErro; track causa.id) {
+                      <td>{{ item.causas[causa.id] || 0 }}</td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="adm-subtitulo">Rodadas para ler</h3>
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Pergunta</th>
+                  <th>Documento</th>
+                  <th>Ordem</th>
+                  @for (item of stats.por_pipeline; track item.codigo) {
+                    <th>{{ curto(item.codigo) }}</th>
+                  }
+                  <th><span class="visualmente-oculto">Abrir</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (caso of stats.erros.casos; track caso.rodada) {
+                  <tr>
+                    <td>{{ caso.pergunta }}</td>
+                    <td>{{ caso.documento }}</td>
+                    <td>{{ caso.ordem }}</td>
+                    @for (item of stats.por_pipeline; track item.codigo) {
+                      <td>
+                        <span class="adm-pequeno">{{
+                          classeDoCaso(caso.classes[item.codigo])
+                        }}</span>
+                        @if (caso.respostas[item.codigo]; as answerId) {
+                          <select
+                            class="causa"
+                            [attr.aria-label]="'Causa confirmada em ' + curto(item.codigo)"
+                            (change)="anotar(answerId, $any($event.target).value)"
+                          >
+                            <option value="" [selected]="!caso.anotacoes[item.codigo]">
+                              Causa: a confirmar
+                            </option>
+                            @for (causa of causasErro; track causa.id) {
+                              <option
+                                [value]="causa.id"
+                                [selected]="caso.anotacoes[item.codigo]?.causa === causa.id"
+                              >
+                                {{ causa.rotulo }}
+                              </option>
+                            }
+                          </select>
+                        }
+                      </td>
+                    }
+                    <td>
+                      @if (caso.documento_id; as documentoId) {
+                        <a
+                          class="adm-btn"
+                          [routerLink]="['/admin/avaliacoes', caso.avaliador, documentoId]"
+                          >Abrir</a
+                        >
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="vazio">Nenhuma rodada foi recusada até agora.</p>
+        }
+      </app-analise-cartao>
+    }
+  }
+} @else if (atualizando()) {
+  <p class="vazio">Carregando resultados…</p>
 }

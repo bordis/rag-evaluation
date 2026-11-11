@@ -33,6 +33,7 @@ export class ApiRagFake {
       area: 'Direito',
       descricao: 'Texto consolidado da Lei nº 13.709/2018.',
       icone: '⚖️',
+      pdfDisponivel: true,
     },
     {
       id: '22222222-2222-2222-2222-222222222222',
@@ -41,6 +42,7 @@ export class ApiRagFake {
       area: 'Tecnologia',
       descricao: 'Pods, deployments e services.',
       icone: '☸️',
+      pdfDisponivel: false,
     },
   ];
 
@@ -61,6 +63,10 @@ export class ApiRagFake {
   async listarDocumentos(): Promise<RagDocument[]> {
     this.checar();
     return [...this.documentos];
+  }
+
+  urlDoPdf(documentId: string): string {
+    return `http://api.teste/documents/${documentId}/arquivo`;
   }
 
   async obterProgresso(): Promise<ProgressoSessao> {

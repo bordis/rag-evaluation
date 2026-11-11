@@ -26,6 +26,7 @@ export interface DocumentoAdmin {
   tabelas: number | null;
   imagens: number | null;
   criado_em: string;
+  pdf_disponivel: boolean;
 }
 
 export interface Ingestao {
@@ -130,41 +131,141 @@ export interface Taxa {
   ic95: [number, number] | null;
 }
 
+export type Intervalo = [number, number];
+
+export interface TestePosicao {
+  qui2: number;
+  gl: number;
+  p_valor: number;
+}
+
+export type ClasseErro = 'recuperacao' | 'geracao' | 'divergencia' | 'sem_nota';
+
+export type CausaErro =
+  | 'sem_resposta_no_documento'
+  | 'conversao'
+  | 'recuperacao'
+  | 'selecao'
+  | 'geracao'
+  | 'avaliador'
+  | 'outra';
+
 export interface Estatisticas {
   rodadas_decididas: number;
   avaliadores: number;
   acaso: number;
-  nenhuma: Taxa;
-  por_pipeline: Array<Taxa & { codigo: string }>;
+  amostra: {
+    meta_avaliadores: Intervalo;
+    meta_rodadas: Intervalo;
+    documentos: number;
+    ciclos: number;
+    ciclos_completos: number;
+    rodadas_por_avaliador_min: number | null;
+    rodadas_por_avaliador_mediana: number | null;
+    rodadas_por_avaliador_max: number | null;
+  };
+  nenhuma: Taxa & { ic95_bootstrap: Intervalo | null };
+  por_pipeline: Array<
+    Taxa & {
+      codigo: string;
+      ic95_simultaneo: Intervalo | null;
+      faixa_posicao: Intervalo | null;
+    }
+  >;
+  comparacoes_simples: Array<
+    Taxa & {
+      a_favor: string;
+      contra: string;
+      fator: string;
+      condicao: string;
+      ic95_bootstrap: Intervalo | null;
+      p_valor: number | null;
+      p_bonferroni: number | null;
+    }
+  >;
+  poder: {
+    rodadas: number;
+    alfa: number;
+    poder_alvo: number;
+    taxa_minima_detectavel: number | null;
+    cenarios: Array<{ taxa_real: number; poder: number; exagero: number | null }>;
+  } | null;
   efeitos: Array<
     Taxa & {
       efeito: string;
       descricao: string;
-      ic95_bootstrap: [number, number] | null;
+      ic95_bootstrap: Intervalo | null;
+      ic95_bootstrap_documento: Intervalo | null;
       p_valor: number | null;
+      p_holm: number | null;
+      pontos_acima_de_50: number | null;
+      razao_chances: number | null;
     }
   >;
   por_documento: Array<{
     documento: string;
     rodadas: number;
     nenhuma: number;
+    avaliadores: number;
+    taxa_docling: number | null;
+    taxa_avancado: number | null;
     vitorias: Record<string, number>;
   }>;
   por_posicao: Array<Taxa & { posicao: number }>;
+  teste_posicao: TestePosicao | null;
+  balanceamento: Array<{ codigo: string; posicoes: number[]; teste: TestePosicao | null }>;
   por_ordem: Array<{
     ordem: number;
     rodadas: number;
     nenhuma: number;
     tempo_ativo_mediano_ms: number | null;
+    tempo_ativo_p25_ms: number | null;
+    tempo_ativo_p75_ms: number | null;
+    tamanho_medio_respostas: number;
+    ms_por_mil_caracteres: number | null;
     taxa_posicao_1: number | null;
     taxa_avancado: number | null;
   }>;
+  metades: {
+    tempo_ativo_inicio_ms: number | null;
+    tempo_ativo_fim_ms: number | null;
+    proporcoes: Array<{
+      metrica: string;
+      inicio: number | null;
+      fim: number | null;
+      p_valor: number | null;
+    }>;
+  } | null;
+  vies_tamanho: Taxa & {
+    acaso: number;
+    p_valor: number | null;
+    por_pipeline: Array<{ codigo: string; caracteres_medio: number | null }>;
+  };
+  por_avaliador: Array<{
+    numero: number;
+    avaliador: string;
+    rodadas: number;
+    documentos: number;
+    nenhuma: number;
+    posicao_preferida: number | null;
+    taxa_posicao_preferida: number | null;
+    p_ajustado: number | null;
+    tempo_ativo_mediano_ms: number | null;
+    revisar: boolean;
+  }>;
+  confiabilidade: {
+    divisoes: number;
+    spearman_medio: number | null;
+    mesmo_primeiro: number;
+  } | null;
   custo: {
     por_pipeline: Array<{
       codigo: string;
       respostas: number;
+      ms_medio: number | null;
       ms_p50: number | null;
       ms_p95: number | null;
+      ms_p50_sem_concorrencia: number | null;
       tokens_medio: number | null;
       usd_medio: number | null;
       usd_total: number;
@@ -173,6 +274,7 @@ export interface Estatisticas {
       codigo: string;
       etapa: string;
       execucoes: number;
+      ms_medio: number;
       ms_p50: number | null;
       ms_p95: number | null;
       tokens_medio: number | null;
@@ -182,10 +284,33 @@ export interface Estatisticas {
       codigo: string;
       documentos: number;
       parsing_ms_medio: number;
+      parsing_participacao: number | null;
       total_ms_medio: number;
       chunks_medio: number;
       tokens_embedding_total: number;
     }>;
+  };
+  custo_beneficio: Array<{
+    codigo: string;
+    taxa: number | null;
+    ic95: Intervalo | null;
+    usd_medio: number;
+    usd_por_mil_perguntas: number;
+    ms_p50: number | null;
+    tokens_medio: number | null;
+    delta_pontos: number | null;
+    multiplo_usd: number | null;
+    multiplo_latencia: number | null;
+    dominado_por: string[];
+  }>;
+  contexto: {
+    por_pipeline: Array<{
+      codigo: string;
+      respostas: number;
+      chunks_medio: number | null;
+      caracteres_medio: number | null;
+    }>;
+    sobreposicao: Array<{ a: string; b: string; rodadas: number; jaccard_medio: number | null }>;
   };
   ragas: {
     respostas_avaliadas: number;
@@ -194,6 +319,8 @@ export interface Estatisticas {
       metrica: string;
       rodadas: number;
       concordancia: number | null;
+      ic95: Intervalo | null;
+      p_valor: number | null;
       acaso: number;
     }>;
     media_por_pipeline: Array<{
@@ -202,6 +329,56 @@ export interface Estatisticas {
       fidelidade: number | null;
       relevancia_resposta: number | null;
       precisao_contexto: number | null;
+    }>;
+    vitorias_comparadas: Array<{
+      codigo: string;
+      rodadas: number;
+      humano: number | null;
+      ragas: number | null;
+    }>;
+    por_margem: Array<{
+      faixa: string;
+      rodadas: number;
+      margem_mediana: number | null;
+      concordancia: number | null;
+    }>;
+    efeitos_fatoriais: Array<{
+      metrica: string;
+      efeito: string;
+      rodadas: number;
+      diferenca: number | null;
+      ic95_bootstrap: Intervalo | null;
+    }>;
+    rejeitadas: {
+      rodadas_rejeitadas: number;
+      rodadas_decididas: number;
+      melhor_nota_rejeitadas: number | null;
+      melhor_nota_decididas: number | null;
+    };
+  };
+  coleta: {
+    viu_todas: Taxa;
+    tempo_pergunta_mediano_ms: number | null;
+    rodadas_recarregadas: number;
+    falhas_de_rodada: number;
+    truncadas_por_pipeline: Array<{ codigo: string; respostas: number }>;
+  };
+  ambiente: Record<string, unknown>;
+  erros: {
+    limiar: number;
+    rodadas: number;
+    por_pipeline: Array<{ codigo: string } & Record<ClasseErro, number>>;
+    causas_confirmadas: Array<{ codigo: string; causas: Record<string, number> }>;
+    casos: Array<{
+      rodada: string;
+      avaliador: string;
+      documento: string;
+      documento_id: string | null;
+      ordem: number;
+      pergunta: string;
+      classes: Record<string, ClasseErro>;
+      respostas: Record<string, string>;
+      anotacoes: Record<string, { causa: CausaErro; nota: string }>;
     }>;
   };
 }
@@ -241,6 +418,12 @@ export class ApiAdmin {
     return chamarApi(this.http.post(`${this.base}/documents`, dados));
   }
 
+  anexarPdf(id: string, arquivo: File): Promise<unknown> {
+    const dados = new FormData();
+    dados.append('arquivo', arquivo);
+    return chamarApi(this.http.put(`${this.base}/documents/${id}/arquivo`, dados));
+  }
+
   excluirDocumento(id: string): Promise<unknown> {
     return chamarApi(this.http.delete(`${this.base}/documents/${id}`));
   }
@@ -275,6 +458,14 @@ export class ApiAdmin {
     return chamarApi(
       this.http.get<AvaliacaoDetalhe>(`${this.base}/admin/avaliacoes/${sessionId}/${documentId}`),
     );
+  }
+
+  anotarResposta(answerId: string, causa: CausaErro): Promise<unknown> {
+    return chamarApi(this.http.put(`${this.base}/admin/answers/${answerId}/anotacao`, { causa }));
+  }
+
+  removerAnotacao(answerId: string): Promise<unknown> {
+    return chamarApi(this.http.delete(`${this.base}/admin/answers/${answerId}/anotacao`));
   }
 
   obterEstatisticas(studyId: string): Promise<Estatisticas> {

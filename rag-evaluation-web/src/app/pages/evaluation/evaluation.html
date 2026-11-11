@@ -1,11 +1,23 @@
 @if (documento(); as doc) {
-  <div #topo class="layout">
+  <div #topo class="layout" [class.layout--com-pdf]="pdfAberto()">
     <header class="head">
       <div class="head__info">
         <span class="head__area">{{ doc.area }}</span>
         <h1 class="head__title font-display">{{ doc.titulo }}</h1>
       </div>
-      <a class="head__switch" routerLink="/documentos">Trocar documento</a>
+      <div class="head__acoes">
+        @if (doc.pdfDisponivel) {
+          <button
+            type="button"
+            class="head__switch head__pdf"
+            [attr.aria-expanded]="pdfAberto()"
+            (click)="alternarPdf()"
+          >
+            {{ pdfAberto() ? 'Fechar documento' : 'Ver documento' }}
+          </button>
+        }
+        <a class="head__switch" routerLink="/documentos">Trocar documento</a>
+      </div>
     </header>
 
     <div class="progresso">
@@ -41,7 +53,11 @@
         @case ('respostas') {
           @if (rodadaPendente(); as rodada) {
             <app-chat-message [pergunta]="rodada.pergunta" />
-            <app-answer-choice [round]="rodada" (escolher)="escolher(rodada.id, $event)" />
+            <app-answer-choice
+              [round]="rodada"
+              (escolher)="escolher(rodada.id, $event)"
+              (respostaVista)="registrarVista($event)"
+            />
           }
         }
         @case ('gerando') {
@@ -98,6 +114,16 @@
       }
     </section>
   </div>
+
+  @if (pdfAberto() && urlDoPdf(); as url) {
+    <aside class="pdf" aria-label="Documento em PDF">
+      <div class="pdf__topo">
+        <span class="pdf__titulo">{{ doc.titulo }}</span>
+        <button type="button" class="head__switch head__pdf" (click)="alternarPdf()">Fechar</button>
+      </div>
+      <iframe class="pdf__quadro" [src]="url" [title]="'PDF de ' + doc.titulo"></iframe>
+    </aside>
+  }
 } @else if (carregando()) {
   <div class="missing">
     <p class="missing__text" role="status">Carregando documento…</p>

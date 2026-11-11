@@ -178,6 +178,7 @@ export class EvaluationStore {
     }
 
     this._gerando.set(true);
+    this.cronometro.registrarPergunta(slug);
     const inicioGeracao = Date.now();
     try {
       const rodada = await this.executar(async () => {

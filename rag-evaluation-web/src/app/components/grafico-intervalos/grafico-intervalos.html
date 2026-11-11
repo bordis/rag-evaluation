@@ -1,0 +1,34 @@
+<div class="grafico">
+  @for (linha of desenhadas(); track linha.rotulo) {
+    <div class="linha" [title]="linha.dica">
+      <span class="rotulo">{{ linha.rotulo }}</span>
+      <span class="area">
+        @for (marca of marcas; track marca) {
+          <span class="grade" [style.left]="pct(marca)"></span>
+        }
+        @if (referencia(); as ref) {
+          <span class="referencia" [style.left]="pct(ref)"></span>
+        }
+        @if (linha.ic; as ic) {
+          <span class="intervalo" [style.left]="pct(ic[0])" [style.width]="largura(ic)"></span>
+        }
+        @if (linha.valor !== null) {
+          <span class="ponto" [style.left]="pct(linha.valor)"></span>
+        }
+      </span>
+      <span class="valor">{{ linha.legenda }}</span>
+    </div>
+  }
+  <div class="linha eixo" aria-hidden="true">
+    <span class="rotulo"></span>
+    <span class="area">
+      @for (marca of marcas; track marca) {
+        <span class="marca" [style.left]="pct(marca)">{{ marca * 100 }}%</span>
+      }
+    </span>
+    <span class="valor"></span>
+  </div>
+  @if (referencia() !== null && rotuloReferencia()) {
+    <p class="nota"><span class="amostra"></span> {{ rotuloReferencia() }}</p>
+  }
+</div>

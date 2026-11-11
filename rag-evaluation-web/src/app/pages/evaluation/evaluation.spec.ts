@@ -47,6 +47,49 @@ describe('Evaluation', () => {
     expect(compiled.querySelector('.composer')).not.toBeNull();
   });
 
+  it('opens and closes the PDF panel without leaving the pending round', async () => {
+    // Arrange
+    await store.carregarCatalogo();
+    await store.askQuestion(docId, 'O que a lei diz?');
+    const fixture = TestBed.createComponent(Evaluation);
+    fixture.componentRef.setInput('docId', docId);
+    await estabilizar(fixture);
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Act
+    compiled.querySelector<HTMLButtonElement>('.head__pdf')!.click();
+    await estabilizar(fixture);
+
+    // Assert
+    expect(compiled.querySelector('iframe')?.getAttribute('src')).toContain(
+      '/documents/11111111-1111-1111-1111-111111111111/arquivo',
+    );
+    expect(compiled.querySelectorAll('.answer__label').length).toBe(4);
+
+    // Act
+    compiled.querySelector<HTMLButtonElement>('.pdf .head__pdf')!.click();
+    await estabilizar(fixture);
+
+    // Assert
+    expect(compiled.querySelector('iframe')).toBeNull();
+    expect(compiled.querySelectorAll('.answer__label').length).toBe(4);
+  });
+
+  it('hides the PDF button when the document has no stored file', async () => {
+    // Arrange
+    await store.carregarCatalogo();
+    const fixture = TestBed.createComponent(Evaluation);
+    fixture.componentRef.setInput('docId', 'kubernetes');
+
+    // Act
+    await estabilizar(fixture);
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(compiled.querySelector('.head__title')).not.toBeNull();
+    expect(compiled.querySelector('.head__pdf')).toBeNull();
+  });
+
   it('renders the four blind answers of an answered round', async () => {
     // Arrange
     await store.carregarCatalogo();

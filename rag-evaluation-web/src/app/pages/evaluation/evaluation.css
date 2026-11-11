@@ -33,14 +33,85 @@
 
 .head__switch {
   flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   color: var(--color-primary);
   text-decoration: none;
+  transition: background-color 0.2s ease;
 }
 
 .head__switch:hover {
-  text-decoration: underline;
+  background-color: var(--color-surface-soft);
+}
+
+.head__acoes {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+}
+
+.head__pdf {
+  background-color: var(--color-canvas);
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+/* O painel ocupa metade da tela e as respostas continuam legíveis ao lado dele. */
+.layout--com-pdf {
+  max-width: none;
+  margin: 0 50vw 0 0;
+}
+
+.pdf {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 50vw;
+  border-left: 1px solid var(--color-hairline);
+  background-color: var(--color-canvas);
+}
+
+.pdf__topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.pdf__titulo {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdf__quadro {
+  flex: 1;
+  width: 100%;
+  border: 0;
+}
+
+@media (max-width: 900px) {
+  .layout--com-pdf {
+    margin: 0 auto;
+  }
+
+  .pdf {
+    width: 100%;
+    border-left: 0;
+  }
 }
 
 /* Fica à vista durante a leitura de respostas longas. */
