@@ -1,8 +1,7 @@
-"""Sessao anonima do avaliador e seu progresso.
+"""Sessao do avaliador e seu progresso.
 
-Nao ha autenticacao: a sessao e so um UUID que o frontend guarda no `sessionStorage`. Ela existe
-para impor o limite de perguntas no servidor e ligar as rodadas ao estudo — nunca para identificar
-a pessoa.
+Uma sessao por login e por estudo: aceitar o termo de novo, em outro navegador, devolve a mesma
+sessao, e o avaliador retoma de onde parou. Da pessoa, so o `sub` do Keycloak fica no banco.
 """
 
 import uuid
@@ -11,6 +10,8 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func
 from sqlmodel import select
 
+from app.api.routers.evaluation import obter_sessao_avaliador
+from app.core.auth import AvaliadorDep
 from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.models.document import Document
@@ -28,12 +29,25 @@ router = APIRouter(prefix="/api/sessions", tags=["sessoes"])
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def criar_sessao(sessao: SessionDep, aceite: AceiteDoTermo) -> SessaoCriada:
-    """A sessao nasce no estudo aberto: sem estudo aberto, ninguem responde."""
+def criar_sessao(sessao: SessionDep, usuario: AvaliadorDep, aceite: AceiteDoTermo) -> SessaoCriada:
+    """A sessao nasce no estudo aberto: sem estudo aberto, ninguem responde.
+
+    Se este login ja tem sessao no estudo, ela volta como esta: o aceite registrado e o primeiro.
+    """
     estudo = estudo_aberto(sessao)
     if estudo is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Não há estudo aberto no momento.")
-    avaliador = EvaluationSession(study_id=estudo.id, termo_versao=aceite.termo_versao)
+    existente = sessao.exec(
+        select(EvaluationSession).where(
+            EvaluationSession.study_id == estudo.id,
+            EvaluationSession.usuario_sub == usuario.sub,
+        )
+    ).first()
+    if existente is not None:
+        return SessaoCriada(id=existente.id, study_id=estudo.id, criado_em=existente.criado_em)
+    avaliador = EvaluationSession(
+        study_id=estudo.id, usuario_sub=usuario.sub, termo_versao=aceite.termo_versao
+    )
     sessao.add(avaliador)
     sessao.commit()
     sessao.refresh(avaliador)
@@ -41,11 +55,11 @@ def criar_sessao(sessao: SessionDep, aceite: AceiteDoTermo) -> SessaoCriada:
 
 
 @router.get("/{session_id}/progress")
-def obter_progresso(sessao: SessionDep, session_id: uuid.UUID) -> ProgressoSessao:
+def obter_progresso(
+    sessao: SessionDep, usuario: AvaliadorDep, session_id: uuid.UUID
+) -> ProgressoSessao:
     """Quantas perguntas ja foram respondidas por documento. Reidrata a UI apos um F5."""
-    avaliador = sessao.get(EvaluationSession, session_id)
-    if avaliador is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada.")
+    avaliador = obter_sessao_avaliador(sessao, session_id, usuario)
 
     max_perguntas = get_settings().max_perguntas
     linhas = sessao.exec(

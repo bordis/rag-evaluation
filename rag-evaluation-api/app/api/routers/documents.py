@@ -6,11 +6,22 @@ import uuid
 from collections.abc import Iterator
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
 from app.core.armazenamento import ArquivoAusente, abrir_pdf, guardar_pdf, remover_pdf
+from app.core.auth import exigir_admin, exigir_avaliador
 from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.core.milvus import construir_cliente
@@ -62,7 +73,7 @@ def _guardar(documento_id: uuid.UUID, conteudo: bytes) -> str:
         ) from erro
 
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
+@router.post("", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(exigir_admin)])
 def enviar_documento(
     sessao: SessionDep,
     tarefas: BackgroundTasks,
@@ -129,7 +140,7 @@ def enviar_documento(
     )
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(exigir_avaliador)])
 def listar_documentos(
     sessao: SessionDep,
     status_documento: Annotated[StatusDocumento | None, Query(alias="status")] = None,
@@ -144,7 +155,7 @@ def listar_documentos(
     ]
 
 
-@router.get("/{documento_id}")
+@router.get("/{documento_id}", dependencies=[Depends(exigir_avaliador)])
 def obter_documento(sessao: SessionDep, documento_id: uuid.UUID) -> DocumentoDetalhe:
     documento = sessao.get(Document, documento_id)
     if documento is None:
@@ -152,7 +163,7 @@ def obter_documento(sessao: SessionDep, documento_id: uuid.UUID) -> DocumentoDet
     return DocumentoDetalhe.model_validate(documento, from_attributes=True)
 
 
-@router.get("/{documento_id}/arquivo")
+@router.get("/{documento_id}/arquivo", dependencies=[Depends(exigir_avaliador)])
 def baixar_arquivo(sessao: SessionDep, documento_id: uuid.UUID) -> StreamingResponse:
     """O PDF original, igual para os 4 pipelines: consulta-lo nao revela nada sobre os bracos."""
     documento = sessao.get(Document, documento_id)
@@ -181,7 +192,7 @@ def baixar_arquivo(sessao: SessionDep, documento_id: uuid.UUID) -> StreamingResp
     )
 
 
-@router.put("/{documento_id}/arquivo")
+@router.put("/{documento_id}/arquivo", dependencies=[Depends(exigir_admin)])
 def anexar_arquivo(
     sessao: SessionDep, documento_id: uuid.UUID, arquivo: Annotated[UploadFile, File()]
 ) -> DocumentoDetalhe:
@@ -205,7 +216,7 @@ def anexar_arquivo(
     return DocumentoDetalhe.model_validate(documento, from_attributes=True)
 
 
-@router.get("/{documento_id}/ingestions")
+@router.get("/{documento_id}/ingestions", dependencies=[Depends(exigir_admin)])
 def listar_ingestoes(sessao: SessionDep, documento_id: uuid.UUID) -> list[IngestaoResumo]:
     """Telemetria por pipeline. Endpoint do pesquisador — o frontend nunca o chama."""
     if sessao.get(Document, documento_id) is None:
@@ -238,7 +249,9 @@ def listar_ingestoes(sessao: SessionDep, documento_id: uuid.UUID) -> list[Ingest
     ]
 
 
-@router.delete("/{documento_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{documento_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(exigir_admin)]
+)
 def excluir_documento(sessao: SessionDep, documento_id: uuid.UUID) -> None:
     documento = sessao.get(Document, documento_id)
     if documento is None:

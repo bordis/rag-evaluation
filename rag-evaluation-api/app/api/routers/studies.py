@@ -3,10 +3,11 @@
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.auth import exigir_admin, exigir_avaliador
 from app.core.db import SessionDep
 from app.models.evaluation import EvaluationSession, QuestionRound
 from app.models.study import StatusEstudo, Study
@@ -43,20 +44,20 @@ def _resumir(sessao: Session, estudo: Study) -> EstudoResumo:
     )
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(exigir_admin)])
 def listar_estudos(sessao: SessionDep) -> list[EstudoResumo]:
     estudos = sessao.exec(select(Study).order_by(Study.iniciado_em.desc())).all()  # type: ignore[union-attr]
     return [_resumir(sessao, estudo) for estudo in estudos]
 
 
-@router.get("/atual")
+@router.get("/atual", dependencies=[Depends(exigir_avaliador)])
 def obter_estudo_atual(sessao: SessionDep) -> EstudoResumo | None:
     """A tela de boas-vindas consulta aqui para saber se o avaliador pode comecar."""
     estudo = estudo_aberto(sessao)
     return _resumir(sessao, estudo) if estudo else None
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(exigir_admin)])
 def criar_estudo(sessao: SessionDep, dados: EstudoCriar) -> EstudoResumo:
     impedimento = impedimento_para_abrir(sessao)
     if impedimento:
@@ -70,7 +71,7 @@ def criar_estudo(sessao: SessionDep, dados: EstudoCriar) -> EstudoResumo:
     return _resumir(sessao, estudo)
 
 
-@router.post("/{study_id}/encerrar")
+@router.post("/{study_id}/encerrar", dependencies=[Depends(exigir_admin)])
 def encerrar_estudo(sessao: SessionDep, study_id: uuid.UUID) -> EstudoResumo:
     estudo = sessao.get(Study, study_id)
     if estudo is None:

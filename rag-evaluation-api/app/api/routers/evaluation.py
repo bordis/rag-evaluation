@@ -10,6 +10,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.auth import AvaliadorDep, Usuario
 from app.core.config import get_settings
 from app.core.db import SessionDep
 from app.models.document import Document, StatusDocumento
@@ -53,9 +54,12 @@ def _montar_rodada(sessao: Session, rodada: QuestionRound) -> RodadaDetalhe:
     )
 
 
-def _obter_sessao_avaliador(sessao: Session, session_id: uuid.UUID) -> EvaluationSession:
+def obter_sessao_avaliador(
+    sessao: Session, session_id: uuid.UUID, usuario: Usuario
+) -> EvaluationSession:
+    """A sessao de outro login responde 404, como se nao existisse: o UUID nao basta para agir."""
     avaliador = sessao.get(EvaluationSession, session_id)
-    if avaliador is None:
+    if avaliador is None or avaliador.usuario_sub != usuario.sub:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada.")
     return avaliador
 
@@ -78,10 +82,14 @@ def _obter_documento(sessao: Session, slug: str) -> Document:
     "/sessions/{session_id}/documents/{slug}/questions", status_code=status.HTTP_201_CREATED
 )
 async def fazer_pergunta(
-    sessao: SessionDep, session_id: uuid.UUID, slug: str, pergunta: PerguntaBody
+    sessao: SessionDep,
+    usuario: AvaliadorDep,
+    session_id: uuid.UUID,
+    slug: str,
+    pergunta: PerguntaBody,
 ) -> RodadaDetalhe:
     """Dispara os pipelines em paralelo e devolve as respostas ja embaralhadas nos rotulos."""
-    _exigir_estudo_aberto(sessao, _obter_sessao_avaliador(sessao, session_id))
+    _exigir_estudo_aberto(sessao, obter_sessao_avaliador(sessao, session_id, usuario))
     documento = _obter_documento(sessao, slug)
     if documento.status is not StatusDocumento.PRONTO:
         raise HTTPException(
@@ -116,10 +124,10 @@ async def fazer_pergunta(
 
 @router.get("/sessions/{session_id}/documents/{slug}/rounds")
 def historico_de_rodadas(
-    sessao: SessionDep, session_id: uuid.UUID, slug: str
+    sessao: SessionDep, usuario: AvaliadorDep, session_id: uuid.UUID, slug: str
 ) -> list[RodadaDetalhe]:
     """Historico completo do par sessao+documento, para reidratar o chat apos um reload."""
-    _obter_sessao_avaliador(sessao, session_id)
+    obter_sessao_avaliador(sessao, session_id, usuario)
     documento = _obter_documento(sessao, slug)
     return [
         _montar_rodada(sessao, rodada)
@@ -129,14 +137,15 @@ def historico_de_rodadas(
 
 @router.post("/rounds/{round_id}/choice")
 def escolher_resposta(
-    sessao: SessionDep, round_id: uuid.UUID, escolha: EscolhaEntrada
+    sessao: SessionDep, usuario: AvaliadorDep, round_id: uuid.UUID, escolha: EscolhaEntrada
 ) -> RodadaDetalhe:
     rodada = sessao.get(QuestionRound, round_id)
     if rodada is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Rodada não encontrada.")
+    avaliador = obter_sessao_avaliador(sessao, rodada.session_id, usuario)
     if rodada.escolhido_em is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta rodada já foi decidida.")
-    _exigir_estudo_aberto(sessao, _obter_sessao_avaliador(sessao, rodada.session_id))
+    _exigir_estudo_aberto(sessao, avaliador)
 
     resposta = next(
         (

@@ -8,12 +8,18 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
 class EvaluationSession(SQLModel, table=True):
-    """Avaliador anonimo em um estudo. TODO: identificar por login entre sessoes (decisao 16)."""
+    """O avaliador em um estudo: uma sessao por login e por estudo (decisao 16).
+
+    Guarda so o `sub` do Keycloak, nunca nome ou e-mail. Sessoes de antes do SSO ficam com
+    `usuario_sub` nulo; o Postgres nao compara nulos na unicidade, entao elas convivem.
+    """
 
     __tablename__ = "evaluation_sessions"
+    __table_args__ = (UniqueConstraint("study_id", "usuario_sub", name="uq_estudo_usuario"),)
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     study_id: uuid.UUID = Field(foreign_key="studies.id", index=True, ondelete="CASCADE")
+    usuario_sub: str | None = Field(default=None, max_length=64)
     termo_versao: str = Field(max_length=32)
     aceito_em: datetime | None = Field(
         default=None,

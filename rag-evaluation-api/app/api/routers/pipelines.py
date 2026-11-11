@@ -3,9 +3,10 @@
 Cada resposta tambem guarda um snapshot da config, entao o que ja foi coletado nunca muda.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.auth import exigir_admin
 from app.core.db import SessionDep
 from app.core.milvus import construir_cliente, garantir_collection
 from app.models.evaluation import PipelineAnswer
@@ -14,7 +15,9 @@ from app.schemas.admin import PipelineAtualizar, PipelineCriar, PipelineDetalhe
 from app.seed import CODIGOS_DE_CONTROLE, FLAGS_RETRIEVAL
 from app.services.studies import PIPELINES_DO_DESENHO, estudo_aberto
 
-router = APIRouter(prefix="/api/pipelines", tags=["pipelines"])
+router = APIRouter(
+    prefix="/api/pipelines", tags=["pipelines"], dependencies=[Depends(exigir_admin)]
+)
 
 
 def _detalhar(pipeline: Pipeline) -> PipelineDetalhe:

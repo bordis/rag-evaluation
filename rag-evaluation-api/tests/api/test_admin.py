@@ -16,6 +16,7 @@ from app.rag.retrieval.base import Candidato
 from app.seed import semear_pipelines
 from app.services import evaluation as servico
 from app.services.ragas_rodadas import _estudos_em_calculo, calcular_notas, reservar_calculo
+from tests.conftest import entrar_como
 from tests.fakes import PipelineFalso, dependencias_falsas
 
 
@@ -73,6 +74,8 @@ def _abrir(cliente, nome: str = "Piloto") -> dict:
 
 
 def _rodada_decidida(cliente, documento, rotulo: str | None = "A") -> tuple[str, dict]:
+    """Cada chamada e um avaliador novo, com login proprio."""
+    entrar_como(f"avaliador-{uuid.uuid4()}")
     sessao_id = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"}).json()[
         "id"
     ]

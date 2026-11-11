@@ -25,6 +25,14 @@ Comparing 1↔2 and 3↔4 isolates the parser; comparing 1↔3 and 2↔4 isolate
 identical across all four on purpose; varying them would confound the variables.
 
 **Non-obvious decisions:**
+- **Auth is Keycloak SSO, validated locally** (`core/auth.py`, PyJWT + the realm's JWKS): RS256, `iss`, `exp`, and
+  `azp == KEYCLOAK_CLIENT_ID` (Keycloak doesn't put the client in `aud`). Roles are the client's
+  (`resource_access.<client>.roles`): `user` evaluates, `admin` manages and also evaluates. `AvaliadorDep`/`AdminDep`
+  or `dependencies=[Depends(exigir_admin)]`; only `/api/health` is public. Specs override `usuario_atual` in
+  `conftest.py` (`entrar_como` switches login); `tests/api/test_auth.py` signs real tokens with a test RSA key.
+- **One evaluation session per login per study** (`usuario_sub`, unique with `study_id`): `POST /sessions` returns the
+  existing one, so an evaluator resumes in another browser. Only the `sub` is stored, never name or e-mail. A session
+  of another login answers **404**, not 403, on every `session_id`/`round_id` route.
 - **Blind evaluation is enforced server-side:** no output schema may contain a `pipeline` field. Not "hidden in
   the UI" — absent from the JSON.
 - **One Milvus collection per pipeline**, not one collection filtered by `pipeline_id`. BM25 computes IDF and
@@ -119,7 +127,7 @@ identical across all four on purpose; varying them would confound the variables.
   rounds, answers, failures), `telemetry` (per-stage metrics, retrieved chunks per stage, RAGAS scores, error annotations).
 - `schemas/` — Pydantic request/response models, kept **separate** from table models; that separation is what
   guarantees the blind.
-- `api/routers/` — one router per domain: `health.py`, `documents.py`, `sessions.py` (anonymous session +
+- `api/routers/` — one router per domain: `health.py`, `documents.py`, `sessions.py` (one session per login +
   progress), `evaluation.py` (question, history, choice), `studies.py`, `pipelines.py` and `admin.py` (researcher views).
 - `rag/` — one file per ingestion stage: `chunking.py`, `parsing/` (`base.py`, `raw.py`, `docling.py`),
   `embedding.py`, `indexing.py`. Each is testable on its own with no infrastructure running.

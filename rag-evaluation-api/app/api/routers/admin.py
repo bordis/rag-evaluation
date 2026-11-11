@@ -8,10 +8,11 @@ import csv
 import io
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from app.core.auth import exigir_admin
 from app.core.db import SessionDep
 from app.models.document import Document
 from app.models.evaluation import EvaluationSession, PipelineAnswer, QuestionRound
@@ -40,7 +41,9 @@ from app.services.ragas_rodadas import (
     situacao_do_estudo,
 )
 
-router = APIRouter(prefix="/api/admin", tags=["administracao"])
+router = APIRouter(
+    prefix="/api/admin", tags=["administracao"], dependencies=[Depends(exigir_admin)]
+)
 
 
 def _obter_estudo(sessao: Session, study_id: uuid.UUID) -> Study:

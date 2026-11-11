@@ -26,6 +26,27 @@ if not _env_tem_chave_real():
 # Importar os modulos de modelo registra as tabelas no metadata do SQLModel.
 from app.models import document, evaluation, pipeline, study, telemetry  # noqa: E402,F401
 
+USUARIO_TESTE_SUB = "avaliador-teste"
+
+
+def _usuario_teste():
+    from app.core.auth import ROLE_ADMIN, ROLE_AVALIADOR, Usuario
+
+    return Usuario(sub=USUARIO_TESTE_SUB, roles=frozenset({ROLE_AVALIADOR, ROLE_ADMIN}))
+
+
+USUARIO_TESTE = _usuario_teste()
+
+
+def entrar_como(sub: str) -> None:
+    """Troca o login do `cliente`: cada login tem a propria sessao no estudo."""
+    from app.core.auth import Usuario, usuario_atual
+    from app.main import app
+
+    usuario = Usuario(sub=sub, roles=USUARIO_TESTE.roles)
+    app.dependency_overrides[usuario_atual] = lambda: usuario
+
+
 TEST_DB_URL = os.environ.get(
     "TEST_DB_URL", "postgresql+psycopg://postgres:admin@localhost:5432/rag-evaluation-test"
 )
@@ -62,9 +83,12 @@ def cliente_fixture(sessao: Session):
     """
     from fastapi.testclient import TestClient
 
+    from app.core.auth import usuario_atual
     from app.core.db import get_session
     from app.main import app
 
     app.dependency_overrides[get_session] = lambda: sessao
+    # O token do Keycloak e validado em tests/api/test_auth.py; aqui o login ja passou.
+    app.dependency_overrides[usuario_atual] = lambda: USUARIO_TESTE
     yield TestClient(app)
     app.dependency_overrides.clear()

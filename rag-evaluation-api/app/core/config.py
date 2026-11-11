@@ -91,6 +91,12 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:4200"
 
+    # SSO: a API so valida o access token do Keycloak (assinatura pelo JWKS do realm, emissor e
+    # validade). As roles vem do cliente, em resource_access.<client_id>.roles.
+    keycloak_url: str = "https://sso-pmpa.procempa.com.br/auth"
+    keycloak_realm: str = "pmpa"
+    keycloak_client_id: str = "smartgen"
+
     @computed_field
     @property
     def sqlalchemy_url(self) -> str:
@@ -121,6 +127,16 @@ class Settings(BaseSettings):
         """O /health fica na raiz do servico, nao sob o caminho do endpoint."""
         partes = urlsplit(self.reranker_url)
         return f"{partes.scheme}://{partes.netloc}/health"
+
+    @computed_field
+    @property
+    def keycloak_issuer(self) -> str:
+        return f"{self.keycloak_url.rstrip('/')}/realms/{self.keycloak_realm}"
+
+    @computed_field
+    @property
+    def keycloak_jwks_url(self) -> str:
+        return f"{self.keycloak_issuer}/protocol/openid-connect/certs"
 
     @computed_field
     @property
