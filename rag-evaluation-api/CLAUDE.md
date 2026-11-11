@@ -160,6 +160,9 @@ identical across all four on purpose; varying them would confound the variables.
 - `uv run alembic revision --autogenerate -m "..."` then `uv run alembic upgrade head`. Migrations also run
   automatically in the app lifespan.
 - `uv run ruff check . --fix` and `uv run ruff format .`. `alembic/versions/` is excluded — it's generated code.
+- `Dockerfile` — exports `uv.lock` to `requirements.txt` and installs with pip from the internal mirror (no uv at
+  runtime), bakes tiktoken's `cl100k_base` and runs a **single** uvicorn process: the RAGAS batch lock is in memory.
+  New runtime files (besides `app/`, `alembic/`, `alembic.ini`) need a `COPY`; deploy notes live in `README.md`.
 - Integration tests call the real model services (`tests/api/test_ingestao_ponta_a_ponta.py`). They are excluded
   from the default suite.
 

@@ -80,3 +80,12 @@ __pycache__/
 .env
 .env.*
 Mestrado-Inteligencia_Artificial_e_Ciencia_de_Dados-Jorge_Miguel_de_Matos_Lourenço.pdf
+
+# Docs e deploy internos (hostnames, registry, espelho PyPI): ficam so nos repos do GitLab
+/rag-evaluation-api/README.md
+/rag-evaluation-api/Dockerfile
+/rag-evaluation-api/.dockerignore
+/rag-evaluation-web/README.md
+/rag-evaluation-web/Dockerfile
+/rag-evaluation-web/.dockerignore
+/rag-evaluation-web/docker/

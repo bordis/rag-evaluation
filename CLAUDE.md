@@ -59,6 +59,9 @@ The results page is split in tabs kept in `?aba=`; every analysis sits in `compo
   must yield the event loop once before asserting — see `estabilizar()` in `evaluation.spec.ts`).
 - `src/environments/environment.ts` (production) and `environment.development.ts` (`ng serve`, via `fileReplacements`) —
   `apiBaseUrl` (must include `/api`) and the Keycloak URL/realm/client. Specs use `testing/keycloak-fake.ts`.
+  Production values are read at runtime from `window.__env` (`/env.js`, loaded by `index.html` before the bundle):
+  in the Docker image nginx renders it from the container's env (`docker/nginx.conf.template`); elsewhere
+  `public/env.js` is empty and the defaults in `environment.ts` apply. A new runtime setting touches all four files.
 
 **Visual system:** follows `DESIGN.md` (editorial serif layout, with the Procempa palette: white
 canvas, blue primary `#4264cd` — not the `#557cf2` of Procempa's buttons, which fails AA with white text). Tokens
@@ -66,6 +69,22 @@ are mirrored as CSS custom properties in `src/styles.css` (never inline hex); fo
 Cormorant Garamond / Inter / JetBrains Mono, loaded from Google Fonts in `src/index.html`.
 
 As the codebase grows, prefer updating this file with real architectural notes over letting it go stale.
+
+## READMEs
+
+There are three, and they go to different places: the repo-root `README.md` is published on a **public**
+GitHub repository; `rag-evaluation-api/README.md` and `rag-evaluation-web/README.md` each belong to their own
+repository on the company's **internal** GitLab.
+
+- **Always keep all three up to date.** Any change to setup, configuration, environment variables, commands,
+  endpoints, Docker/deploy or user-visible behaviour updates, in the same change, the root README and the inner
+  README of the affected project.
+- **Never put internal information in the root README:** company hostnames and URLs (container registry, PyPI
+  mirror, GitLab, SSO server, internal model services), deploy and Docker instructions, internal addresses,
+  credentials or names of internal systems. Those go only in the inner READMEs; the root uses generic
+  placeholders (`https://seu-servico/v1`).
+- **Inner READMEs are self-contained:** the GitLab repos don't see the root, so each one explains how to run,
+  configure, test and deploy its own project without linking back to the root.
 
 ## Commands
 
