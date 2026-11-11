@@ -68,7 +68,7 @@ def _exigir_estudo_aberto(sessao: Session, avaliador: EvaluationSession) -> None
     """Encerrado o estudo, os dados dele ficam congelados."""
     estudo = sessao.get(Study, avaliador.study_id)
     if estudo is None or estudo.status is not StatusEstudo.ABERTO:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Este estudo já foi encerrado.")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta avaliação já foi encerrada.")
 
 
 def _obter_documento(sessao: Session, slug: str) -> Document:
@@ -116,7 +116,8 @@ async def fazer_pergunta(
         # A falha de um unico pipeline invalida a rodada: escolher entre 3 respostas produziria um
         # dado que nao agrega com os das demais rodadas.
         raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, detail=f"Falha ao gerar as respostas: {erro}"
+            status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível gerar as respostas. Tente novamente em instantes.",
         ) from erro
 
     return _montar_rodada(sessao, rodada)

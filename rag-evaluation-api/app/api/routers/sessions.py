@@ -60,7 +60,7 @@ def criar_sessao(sessao: SessionDep, usuario: AvaliadorDep, aceite: AceiteDoTerm
     """
     estudo = estudo_aberto(sessao)
     if estudo is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail="Não há estudo aberto no momento.")
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="A avaliação não está aberta no momento.")
     existente = _sessao_do_usuario(sessao, estudo.id, usuario.sub)
     if existente is not None:
         return SessaoCriada(id=existente.id, study_id=estudo.id, criado_em=existente.criado_em)
