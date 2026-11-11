@@ -8,7 +8,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.api.routers.evaluation import obter_sessao_avaliador
 from app.core.auth import AvaliadorDep
@@ -28,6 +28,30 @@ from app.services.studies import estudo_aberto
 router = APIRouter(prefix="/api/sessions", tags=["sessoes"])
 
 
+def _sessao_do_usuario(sessao: Session, study_id: uuid.UUID, sub: str) -> EvaluationSession | None:
+    return sessao.exec(
+        select(EvaluationSession).where(
+            EvaluationSession.study_id == study_id,
+            EvaluationSession.usuario_sub == sub,
+        )
+    ).first()
+
+
+@router.get("/me")
+def obter_minha_sessao(sessao: SessionDep, usuario: AvaliadorDep) -> SessaoCriada | None:
+    """A sessao deste login no estudo aberto, ou nulo se ele ainda nao aceitou o termo.
+
+    Ter sessao e ter aceitado: e o que permite nao mostrar o termo de novo, em qualquer navegador.
+    """
+    estudo = estudo_aberto(sessao)
+    if estudo is None:
+        return None
+    existente = _sessao_do_usuario(sessao, estudo.id, usuario.sub)
+    if existente is None:
+        return None
+    return SessaoCriada(id=existente.id, study_id=estudo.id, criado_em=existente.criado_em)
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def criar_sessao(sessao: SessionDep, usuario: AvaliadorDep, aceite: AceiteDoTermo) -> SessaoCriada:
     """A sessao nasce no estudo aberto: sem estudo aberto, ninguem responde.
@@ -37,12 +61,7 @@ def criar_sessao(sessao: SessionDep, usuario: AvaliadorDep, aceite: AceiteDoTerm
     estudo = estudo_aberto(sessao)
     if estudo is None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Não há estudo aberto no momento.")
-    existente = sessao.exec(
-        select(EvaluationSession).where(
-            EvaluationSession.study_id == estudo.id,
-            EvaluationSession.usuario_sub == usuario.sub,
-        )
-    ).first()
+    existente = _sessao_do_usuario(sessao, estudo.id, usuario.sub)
     if existente is not None:
         return SessaoCriada(id=existente.id, study_id=estudo.id, criado_em=existente.criado_em)
     avaliador = EvaluationSession(

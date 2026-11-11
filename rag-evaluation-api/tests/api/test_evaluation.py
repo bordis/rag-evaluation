@@ -8,6 +8,7 @@ from app.models.evaluation import EvaluationSession, QuestionRound
 from app.models.study import StatusEstudo, Study
 from app.seed import semear_pipelines
 from app.services import evaluation as servico
+from tests.conftest import entrar_como
 from tests.fakes import PipelineFalso, dependencias_falsas
 
 
@@ -105,6 +106,31 @@ def test_sessao_grava_o_aceite_e_nasce_no_estudo_aberto(cliente, sessao, estudo)
     assert avaliador.study_id == estudo.id
     assert avaliador.termo_versao == "v1"
     assert avaliador.aceito_em is not None
+
+
+def test_minha_sessao_diz_se_o_login_ja_aceitou_o_termo(cliente, sessao, estudo):
+    assert cliente.get("/api/sessions/me").json() is None
+
+    session_id = _criar_sessao(cliente)
+
+    minha = cliente.get("/api/sessions/me").json()
+    assert minha["id"] == session_id
+    assert minha["study_id"] == str(estudo.id)
+
+
+def test_minha_sessao_nao_enxerga_o_aceite_de_outro_login(cliente):
+    _criar_sessao(cliente)
+
+    entrar_como(f"outro-{uuid.uuid4()}")
+
+    assert cliente.get("/api/sessions/me").json() is None
+
+
+def test_minha_sessao_some_quando_o_estudo_encerra(cliente, sessao, estudo):
+    _criar_sessao(cliente)
+    _encerrar(sessao, estudo)
+
+    assert cliente.get("/api/sessions/me").json() is None
 
 
 def test_sem_estudo_aberto_ninguem_comeca(cliente, sessao, estudo):
