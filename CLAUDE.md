@@ -13,6 +13,8 @@ live in the repo-root `README.md`.
 evaluator knows best) → ChatGPT-style Q&A → for each question, four anonymous answers (A/B/C/D) → choose the best or
 "none is correct". Up to **10 answered questions per document, per study**; evaluators can switch documents freely.
 Researcher screens live under `/admin` (studies, documents, pipelines CRUD, round browser, results).
+The results page is split in tabs kept in `?aba=`; every analysis sits in `components/analise-cartao/`, whose "?" text
+(how to read it, caveats, sources) lives in `pages/admin/resultados-ajuda.ts`. New analysis means a new help entry.
 
 **Key design decisions (not obvious from code):**
 - **The blind is enforced server-side:** the API's evaluation schemas have no `pipeline` field, so the identity
@@ -28,6 +30,8 @@ Researcher screens live under `/admin` (studies, documents, pipelines CRUD, roun
   hidden-tab time are separate fields, not subtracted.
 - **Each question is a step, one per screen, with no way back** (`components/progresso-etapas/` only shows progress).
   This was the researcher's decision after trying read-only review; the server doesn't allow a second choice either.
+- **The evaluator can open the document's PDF** in a side panel of the evaluation screen, in the same tab so the
+  consultation isn't counted as hidden time. It is deliberately not linked to chunks or citations: chunk text exposes the parser.
 - **Answers are Markdown** (`pipes/markdown-pipe.ts`, always through `[innerHTML]`, whose sanitizer is the XSS filter).
 - No authentication in this phase, including `/admin`, which reveals pipelines. The top menu links to it on every
   screen on purpose for now; hide those links from evaluators before collection. TODO: login. UI copy is **Portuguese (BR)**.

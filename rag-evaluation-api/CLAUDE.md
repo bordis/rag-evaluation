@@ -36,7 +36,10 @@ identical across all four on purpose; varying them would confound the variables.
   shortcut; without the explicit form, "proteção" and "protecao" would be distinct terms.
 - **`gpt-4.1-mini`, not a reasoning model.** Reasoning models reject custom `temperature` and spend reasoning
   tokens, which would contaminate the per-pipeline token telemetry the study measures.
-- **The uploaded file is never persisted** — no disk, no column. Only `sha256` is kept, to detect duplicates.
+- **The uploaded PDF lives in MinIO** (`core/armazenamento.py`, bucket `documentos`, separate from Milvus's `a-bucket`)
+  so evaluators can consult it; the browser only gets it through `GET /api/documents/{id}/arquivo`. It is the same file
+  for all four arms, so it doesn't touch the blind. It is never linked to chunks in the evaluator flow, on purpose: chunk
+  text exposes the parser. `sha256` detects duplicates, and `PUT .../arquivo` only accepts the file that was ingested.
 - **Enum columns store the enum *value*, not the member name** (`app/models/_types.py`). SQLAlchemy defaults to
   the name, which would put `ATE_2_ANOS` in the database while the API serializes `ate-2-anos`.
 - **Alembic's `script.py.mako` adds `import sqlmodel`** — autogenerate emits `sqlmodel.sql.sqltypes.AutoString()`
@@ -74,6 +77,16 @@ identical across all four on purpose; varying them would confound the variables.
 - **A round is decided when `escolhido_em` is set**, not when `escolha_answer_id` is: "none is correct" has no answer.
 - **Effects are binary tests on the winning answer** (`services/analise.py`), which avoids the dependence between the
   four answers of a round.
+- **Power is computed for a range of plausible rates, never from the observed effect** (post-hoc power is a known
+  trap). It treats rounds as independent, so it is an upper bound.
+- **The bootstrap returns no interval with a single group.** One evaluator or document would give a zero-width interval.
+- **The error triage is a first guess, not a diagnosis.** `LIMIAR_NOTA_BAIXA` (0.5) is this project's convention. The
+  final cause is the researcher's, in `answer_annotations`.
+- **`tempo_total_ms` includes writing the question.** Reading time is total minus `tempo_pergunta_ms`, generation and
+  hidden time (`tempo_ativo_ms`); without that subtraction fatigue is confounded with typing.
+- **Cost is frozen when recorded** (`answer_stage_metrics.custo_usd`), and `studies.config_snapshot` and
+  `document_ingestions.config_snapshot` keep what the answer's own snapshot lacks: models, prompts, prices, chunking.
+- **`rodadas_simultaneas` isolates re-rank latency:** quote `ms_p50_sem_concorrencia`, not the contended p50.
 - **The study RAGAS batch commits per answer** and `reservar_calculo` blocks a second batch while one runs (in-memory:
   the API is a single process). That is what lets `GET /api/admin/studies/{id}/ragas` report progress.
 - **The blind rule is scoped to evaluation schemas.** `GET /api/documents/{id}/ingestions` exposes
@@ -82,7 +95,8 @@ identical across all four on purpose; varying them would confound the variables.
 - **Chunk metadata carries no page or section.** Chunking is token-based, by whole sentences, over the whole text and
   identical across all four pipelines; making it page-aware would break that parity. Known, accepted limitation.
 - **One failing pipeline invalidates the whole round (502).** Offering a choice among three answers would
-  produce a data point that doesn't aggregate with the others. Nothing is persisted in that case.
+  produce a data point that does not aggregate with the others. Only the question and the error are kept, in
+  `round_failures`: failed questions would otherwise vanish from the sample unnoticed.
 - **Only a *decided* round counts toward `MAX_PERGUNTAS`** — asking and walking away doesn't burn the quota.
 - **`services/evaluation.py` flushes between levels.** No table declares a `Relationship`, so the unit of work
   doesn't know `question_rounds` must precede `pipeline_answers`; without the explicit `flush()` the insert
@@ -96,8 +110,9 @@ identical across all four on purpose; varying them would confound the variables.
   (stripping the `jdbc:` prefix inherited from the requirements) and the Milvus URI.
 - `core/db.py` — engine, `get_session`, `SessionDep`, and `rodar_migracoes()` (called from the lifespan).
 - `core/milvus.py` — client, collection schema, idempotent `criar_collections`.
-- `models/` — ten SQLModel tables: `pipeline`, `study`, `document` (documents + ingestions), `evaluation` (sessions,
-  rounds, answers), `telemetry` (per-stage metrics, retrieved chunks per stage, RAGAS scores).
+- `core/armazenamento.py` — MinIO client: stores, opens and removes the acervo's PDFs.
+- `models/` — twelve SQLModel tables: `pipeline`, `study`, `document` (documents + ingestions), `evaluation` (sessions,
+  rounds, answers, failures), `telemetry` (per-stage metrics, retrieved chunks per stage, RAGAS scores, error annotations).
 - `schemas/` — Pydantic request/response models, kept **separate** from table models; that separation is what
   guarantees the blind.
 - `api/routers/` — one router per domain: `health.py`, `documents.py`, `sessions.py` (anonymous session +

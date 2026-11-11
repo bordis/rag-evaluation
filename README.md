@@ -142,10 +142,21 @@ MILVUS_COLLECTION_NAME_2=evaluation2
 MILVUS_COLLECTION_NAME_3=evaluation3
 MILVUS_COLLECTION_NAME_4=evaluation4
 
+# MinIO (container rag-minio, guarda os PDFs)
+MINIO_URL=http://localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET_DOCUMENTOS=documentos
+
 # Docling
 DOCLING_URL=http://localhost:5001
 DOCLING_TIMEOUT_SECONDS=1800
 DOCLING_DO_OCR=false
+DOCLING_PDF_BACKEND=pypdfium2
+DOCLING_TABLE_MODE=accurate
+DOCLING_DESCREVER_IMAGENS=true
+DOCLING_IMAGEM_AREA_MINIMA=0.05
+DOCLING_IMAGEM_MODELO=gpt-4.1-mini
 # Só com antivírus que inspeciona HTTPS (veja Problemas comuns)
 DOCLING_CA_BUNDLE=
 
@@ -184,11 +195,15 @@ mantenha-as no arquivo para deixar a configuração do estudo explícita.
 | `DB_URL` / `DB_NAME` / `DB_USERNAME` / `DB_PASSWORD` | Conexão do PostgreSQL. O compose usa as três últimas para criar o banco, apenas na primeira subida; trocá-las depois não altera um banco que já existe. |
 | `MILVUS_HOST` / `MILVUS_PORT` / `MILVUS_USERNAME` / `MILVUS_PASSWORD` / `MILVUS_DATABASE_NAME` | Conexão do Milvus. |
 | `MILVUS_COLLECTION_NAME_1` a `MILVUS_COLLECTION_NAME_4` | Collection de cada um dos 4 pipelines. |
+| `MINIO_URL` / `MINIO_BUCKET_DOCUMENTOS` | URL da API do MinIO (porta 9000, não a do console) e bucket onde os PDFs enviados ficam guardados. |
+| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | Credenciais do MinIO. Precisam ser iguais às do `docker-compose.yml`, que o Milvus também usa. |
 | `DOCLING_URL` / `DOCLING_TIMEOUT_SECONDS` | Endereço e timeout do docling-serve. |
 | `DOCLING_DO_OCR` | Mantenha `false`: os documentos são PDFs digitais, e o OCR tornaria o tempo de ingestão incomparável ao do parser raw. |
 | `RAGAS_LLM_MODEL` | Modelo juiz do RAGAS, diferente do modelo de geração para evitar autopromoção. |
 | `RAG_SEARCH_LIMIT` / `RAG_ANCORAS` | Chunks entregues ao LLM e âncoras dos pipelines 3 e 4, na semeadura. |
 | `RERANKER_URL` / `RERANKER_MODEL` | Endereço do container `rag-reranker` e nome gravado na telemetria. O modelo em si é definido no compose. |
+| `DOCLING_PDF_BACKEND` / `DOCLING_TABLE_MODE` | Backend de leitura do PDF e modo de extração de tabelas. Afetam o parser, um dos fatores do estudo: não altere depois de ingerir os documentos. |
+| `DOCLING_DESCREVER_IMAGENS` / `DOCLING_IMAGEM_AREA_MINIMA` / `DOCLING_IMAGEM_MODELO` | Se as imagens são descritas, a área mínima (fração da página) para descrever e o modelo usado. Também afetam o parser. |
 | `DOCLING_CA_BUNDLE` | Caminho, dentro do container, do bundle de certificados. |
 | `CHUNK_SIZE` / `CHUNK_OVERLAP` | Chunking em tokens, idêntico nos 4 pipelines. Mudar exige reingerir o acervo. |
 | `RERANK_CANDIDATES` / `SLIDING_WINDOW_SIZE` | Candidatos antes da reordenação e vizinhos de cada lado da âncora. |
@@ -205,6 +220,13 @@ docker compose up -d
 ```
 
 O **Milvus leva ~90 segundos** para reportar `healthy`. Acompanhe com `docker compose ps`.
+
+Interfaces para inspecionar os dados:
+
+| Interface | URL | O que mostra |
+|---|---|---|
+| Attu | `http://localhost:3000` | Collections do Milvus. |
+| Console do MinIO | `http://localhost:9001` (login `minioadmin` / `minioadmin`) | PDFs enviados, no bucket `documentos`. O `a-bucket` guarda os arquivos internos do Milvus. |
 
 ### 4. Subir a API
 
@@ -249,8 +271,9 @@ O menu superior leva a esta área em todas as telas, e ela **não tem senha nest
 - **Estudos:** só com um estudo aberto o avaliador responde. Encerrado, os dados ficam congelados nele,
   e o próximo começa zerado. O acervo é compartilhado entre estudos.
 - **Documentos:** envio de **PDF digital** (até `MAX_UPLOAD_MB`), status da ingestão, contagem de
-  páginas, tabelas e imagens. O arquivo **não é guardado**, só o `sha256`. Documento com rodadas não
-  pode ser excluído.
+  páginas, tabelas e imagens. O PDF fica guardado no MinIO e o avaliador pode abri-lo na tela da avaliação.
+  Documento enviado antes disso aparece com o botão "Anexar PDF", que só aceita o mesmo arquivo. Documento
+  com rodadas não pode ser excluído.
 - **Pipelines:** CRUD com a configuração em JSON. Com estudo aberto, nada muda. O braço de controle
   não liga técnicas avançadas. Cada resposta guarda um snapshot da configuração usada.
 - **Avaliações:** navega nas perguntas de um ciclo e mostra respostas, pipeline, escolha, tempos,
@@ -293,6 +316,7 @@ chamadas por rodada.
 | `POST` | `/api/studies/{id}/encerrar` | Encerra o estudo. |
 | `POST` `GET` | `/api/documents` | Upload de PDF (**202**) e listagem; o avaliador filtra por `status=pronto`. |
 | `GET` `DELETE` | `/api/documents/{id}` | Detalhe e remoção. |
+| `GET` `PUT` | `/api/documents/{id}/arquivo` | Abre o PDF guardado; o `PUT` anexa o arquivo a um documento antigo, sem refazer a ingestão. |
 | `GET` | `/api/documents/{id}/ingestions` | Telemetria de ingestão por pipeline. |
 | `GET` `POST` | `/api/pipelines` | CRUD dos pipelines. |
 | `GET` `PUT` `DELETE` | `/api/pipelines/{id}` | CRUD dos pipelines. |
