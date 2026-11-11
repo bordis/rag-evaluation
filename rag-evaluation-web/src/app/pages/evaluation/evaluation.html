@@ -115,13 +115,19 @@
     </section>
   </div>
 
-  @if (pdfAberto() && urlDoPdf(); as url) {
+  @if (pdfAberto()) {
     <aside class="pdf" aria-label="Documento em PDF">
       <div class="pdf__topo">
         <span class="pdf__titulo">{{ doc.titulo }}</span>
         <button type="button" class="head__switch head__pdf" (click)="alternarPdf()">Fechar</button>
       </div>
-      <iframe class="pdf__quadro" [src]="url" [title]="'PDF de ' + doc.titulo"></iframe>
+      @if (urlDoPdf(); as url) {
+        <iframe class="pdf__quadro" [src]="url" [title]="'PDF de ' + doc.titulo"></iframe>
+      } @else if (erroPdf()) {
+        <p class="pdf__aviso" role="alert">Não foi possível abrir o PDF. Feche e tente de novo.</p>
+      } @else {
+        <p class="pdf__aviso" role="status">Carregando o PDF…</p>
+      }
     </aside>
   }
 } @else if (carregando()) {

@@ -415,8 +415,18 @@ export class AdminResultados {
     inject(DestroyRef).onDestroy(() => clearTimeout(this.temporizador));
   }
 
-  protected urlCsv(): string {
-    return this.api.urlExportacao(this.studyId());
+  protected async exportarCsv(): Promise<void> {
+    try {
+      const csv = await this.api.baixarExportacao(this.studyId());
+      const url = URL.createObjectURL(csv);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `estudo-${this.studyId()}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (erro) {
+      this.erro.set((erro as Error).message);
+    }
   }
 
   protected carregar(): void {

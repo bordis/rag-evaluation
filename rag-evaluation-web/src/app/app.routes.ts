@@ -1,11 +1,12 @@
 import { inject } from '@angular/core';
 import { type CanActivateFn, Router, Routes } from '@angular/router';
 
+import { exigeRole, ROLE_ADMIN, ROLES_DO_ESTUDO } from './auth/autenticacao';
 import { EvaluationStore } from './services/evaluation-store';
 
 /**
  * Sem sessão válida no estudo aberto, o avaliador volta ao início para aceitar o termo.
- * TODO: proteger as rotas `/admin` com o login previsto; nesta fase ficam abertas por decisão.
+ * O login vem antes de tudo (`login-required`); `exigeRole` confere a role do cliente.
  */
 const exigeSessao: CanActivateFn = async () => {
   const valida = await inject(EvaluationStore).sessaoValida();
@@ -15,24 +16,30 @@ const exigeSessao: CanActivateFn = async () => {
 export const routes: Routes = [
   {
     path: '',
+    canActivate: [exigeRole],
+    data: { roles: ROLES_DO_ESTUDO },
     loadComponent: () => import('./pages/welcome/welcome').then((m) => m.Welcome),
     title: 'Avaliação de Pipeline RAG',
   },
   {
     path: 'documentos',
-    canActivate: [exigeSessao],
+    canActivate: [exigeRole, exigeSessao],
+    data: { roles: ROLES_DO_ESTUDO },
     loadComponent: () =>
       import('./pages/document-selection/document-selection').then((m) => m.DocumentSelection),
     title: 'Escolha um documento · Avaliação RAG',
   },
   {
     path: 'avaliacao/:docId',
-    canActivate: [exigeSessao],
+    canActivate: [exigeRole, exigeSessao],
+    data: { roles: ROLES_DO_ESTUDO },
     loadComponent: () => import('./pages/evaluation/evaluation').then((m) => m.Evaluation),
     title: 'Avaliação · RAG',
   },
   {
     path: 'admin',
+    canActivate: [exigeRole],
+    data: { roles: [ROLE_ADMIN] },
     loadComponent: () => import('./pages/admin/admin-shell').then((m) => m.AdminShell),
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'estudos' },
@@ -68,6 +75,11 @@ export const routes: Routes = [
         title: 'Resultados · Gerenciamento',
       },
     ],
+  },
+  {
+    path: 'sem-acesso',
+    loadComponent: () => import('./pages/sem-acesso/sem-acesso').then((m) => m.SemAcesso),
+    title: 'Sem acesso · Avaliação RAG',
   },
   { path: '**', redirectTo: '' },
 ];

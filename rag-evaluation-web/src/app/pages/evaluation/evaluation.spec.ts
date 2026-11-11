@@ -23,6 +23,9 @@ describe('Evaluation', () => {
 
   beforeEach(async () => {
     sessionStorage.clear();
+    // O jsdom não implementa URLs de blob.
+    URL.createObjectURL = vi.fn(() => 'blob:pdf-de-teste');
+    URL.revokeObjectURL = vi.fn();
     api = new ApiRagFake();
     await TestBed.configureTestingModule({
       imports: [Evaluation],
@@ -61,9 +64,8 @@ describe('Evaluation', () => {
     await estabilizar(fixture);
 
     // Assert
-    expect(compiled.querySelector('iframe')?.getAttribute('src')).toContain(
-      '/documents/11111111-1111-1111-1111-111111111111/arquivo',
-    );
+    expect(api.pdfsBaixados).toEqual(['11111111-1111-1111-1111-111111111111']);
+    expect(compiled.querySelector('iframe')?.getAttribute('src')).toBe('blob:pdf-de-teste');
     expect(compiled.querySelectorAll('.answer__label').length).toBe(4);
 
     // Act
@@ -72,6 +74,7 @@ describe('Evaluation', () => {
 
     // Assert
     expect(compiled.querySelector('iframe')).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:pdf-de-teste');
     expect(compiled.querySelectorAll('.answer__label').length).toBe(4);
   });
 

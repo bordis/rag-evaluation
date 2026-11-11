@@ -103,6 +103,12 @@
   border: 0;
 }
 
+.pdf__aviso {
+  padding: var(--space-md);
+  font-size: 14px;
+  color: var(--color-body);
+}
+
 @media (max-width: 900px) {
   .layout--com-pdf {
     margin: 0 auto;

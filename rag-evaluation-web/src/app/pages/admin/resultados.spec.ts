@@ -92,7 +92,7 @@ async function montar(dados: Estatisticas, aba?: string) {
               com_erro: 0,
               ultimo_erro: null,
             }),
-          urlExportacao: () => '/export.csv',
+          baixarExportacao: () => Promise.resolve(new Blob(['a;b'])),
         },
       },
     ],

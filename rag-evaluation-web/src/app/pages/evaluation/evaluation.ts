@@ -11,9 +11,10 @@ import {
   type OnDestroy,
   input,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
-import { DomSanitizer } from '@angular/platform-browser';
+import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 
 import { AnswerChoice } from '../../components/answer-choice/answer-choice';
@@ -69,13 +70,13 @@ export class Evaluation implements OnDestroy {
   protected readonly documento = computed(() => this.store.getDocument(this.docId()));
   /** Abre na mesma aba: em outra, a consulta sairia do tempo de leitura como tempo oculto. */
   protected readonly pdfAberto = signal(false);
-  /** A URL é montada por `ApiRag` a partir do id do documento, nunca de texto do usuário. */
-  protected readonly urlDoPdf = computed(() => {
-    const documento = this.documento();
-    return documento?.pdfDisponivel
-      ? this.sanitizer.bypassSecurityTrustResourceUrl(this.api.urlDoPdf(documento.id))
-      : null;
-  });
+  /**
+   * O PDF chega como blob pelo `HttpClient`, que leva o token do login: um `<iframe>` apontando
+   * para a API não mandaria o cabeçalho. A URL `blob:` é local, criada aqui, nunca texto do usuário.
+   */
+  protected readonly urlDoPdf = signal<SafeResourceUrl | null>(null);
+  protected readonly erroPdf = signal(false);
+  private urlBlob: string | null = null;
   private readonly rounds = computed(() => this.store.rounds(this.docId()));
   protected readonly decididas = computed(() => this.rounds().filter((item) => item.escolhidoEm));
   protected readonly rodadaPendente = computed(() =>
@@ -115,6 +116,8 @@ export class Evaluation implements OnDestroy {
     // então a carga acompanha o input em vez de rodar uma vez na construção.
     effect(() => {
       void this.store.abrirDocumento(this.docId());
+      // O PDF aberto é do documento anterior.
+      untracked(() => this.fecharPdf());
     });
 
     // A entrada de cada etapa. O `?.` cobre o jsdom, que não tem essas APIs.
@@ -135,6 +138,7 @@ export class Evaluation implements OnDestroy {
   /** Fora desta tela o avaliador não está respondendo: o tempo conta como ausência. */
   ngOnDestroy(): void {
     this.cronometro.pausar();
+    this.fecharPdf();
   }
 
   protected async perguntar(): Promise<void> {
@@ -182,8 +186,37 @@ export class Evaluation implements OnDestroy {
     }
   }
 
-  protected alternarPdf(): void {
-    this.pdfAberto.update((aberto) => !aberto);
+  protected async alternarPdf(): Promise<void> {
+    if (this.pdfAberto()) {
+      this.fecharPdf();
+      return;
+    }
+    const documento = this.documento();
+    if (!documento?.pdfDisponivel) {
+      return;
+    }
+    this.pdfAberto.set(true);
+    try {
+      const pdf = await this.api.baixarPdf(documento.id);
+      // Fechado (ou trocado de documento) enquanto baixava.
+      if (!this.pdfAberto() || this.documento()?.id !== documento.id) {
+        return;
+      }
+      this.urlBlob = URL.createObjectURL(pdf);
+      this.urlDoPdf.set(this.sanitizer.bypassSecurityTrustResourceUrl(this.urlBlob));
+    } catch {
+      this.erroPdf.set(true);
+    }
+  }
+
+  private fecharPdf(): void {
+    this.pdfAberto.set(false);
+    this.urlDoPdf.set(null);
+    this.erroPdf.set(false);
+    if (this.urlBlob) {
+      URL.revokeObjectURL(this.urlBlob);
+      this.urlBlob = null;
+    }
   }
 
   protected irParaDocumentos(): void {

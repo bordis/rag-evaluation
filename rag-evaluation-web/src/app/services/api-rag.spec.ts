@@ -31,7 +31,7 @@ describe('ApiRag', () => {
     await expect(promessa).resolves.toEqual([]);
   });
 
-  it('converts the PDF availability and builds the file URL', async () => {
+  it('converts the PDF availability', async () => {
     // Act
     const promessa = api.listarDocumentos();
     http.expectOne(`${base}/documents?status=pronto`).flush([
@@ -49,7 +49,17 @@ describe('ApiRag', () => {
 
     // Assert
     expect(documento.pdfDisponivel).toBe(true);
-    expect(api.urlDoPdf('doc-1')).toBe(`${base}/documents/doc-1/arquivo`);
+  });
+
+  it('downloads the PDF through HttpClient so it carries the login token', async () => {
+    // Act
+    const promessa = api.baixarPdf('doc-1');
+    const requisicao = http.expectOne(`${base}/documents/doc-1/arquivo`);
+    requisicao.flush(new Blob(['%PDF']));
+
+    // Assert
+    expect(requisicao.request.responseType).toBe('blob');
+    await expect(promessa).resolves.toBeInstanceOf(Blob);
   });
 
   it('converts the snake_case round into the domain shape', async () => {

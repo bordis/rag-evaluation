@@ -100,9 +100,11 @@ export class ApiRag {
     }));
   }
 
-  /** O navegador abre esta URL direto no visualizador de PDF dele. */
-  urlDoPdf(documentId: string): string {
-    return `${this.base}/documents/${documentId}/arquivo`;
+  /** Baixa pelo `HttpClient` para o PDF levar o token do login, como as demais chamadas. */
+  baixarPdf(documentId: string): Promise<Blob> {
+    return this.executar(
+      this.http.get(`${this.base}/documents/${documentId}/arquivo`, { responseType: 'blob' }),
+    );
   }
 
   async obterProgresso(sessionId: string): Promise<ProgressoSessao> {

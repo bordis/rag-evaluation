@@ -467,8 +467,13 @@ export class ApiAdmin {
     return chamarApi(this.http.get<Estatisticas>(`${this.base}/admin/studies/${studyId}/stats`));
   }
 
-  urlExportacao(studyId: string): string {
-    return `${this.base}/admin/studies/${studyId}/export.csv`;
+  /** Pelo `HttpClient`, para levar o token: um link direto chegaria à API sem login. */
+  baixarExportacao(studyId: string): Promise<Blob> {
+    return chamarApi(
+      this.http.get(`${this.base}/admin/studies/${studyId}/export.csv`, {
+        responseType: 'blob',
+      }),
+    );
   }
 
   calcularRagasDoEstudo(studyId: string): Promise<{ mensagem: string }> {

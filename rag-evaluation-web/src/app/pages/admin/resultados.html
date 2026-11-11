@@ -9,7 +9,7 @@
 }
 
 <div class="adm-acoes">
-  <a class="adm-btn" [href]="urlCsv()">Exportar CSV</a>
+  <button class="adm-btn" type="button" (click)="exportarCsv()">Exportar CSV</button>
   <button class="adm-btn" type="button" [disabled]="atualizando()" (click)="carregar()">
     @if (atualizando()) {
       Atualizando…

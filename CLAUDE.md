@@ -33,8 +33,11 @@ The results page is split in tabs kept in `?aba=`; every analysis sits in `compo
 - **The evaluator can open the document's PDF** in a side panel of the evaluation screen, in the same tab so the
   consultation isn't counted as hidden time. It is deliberately not linked to chunks or citations: chunk text exposes the parser.
 - **Answers are Markdown** (`pipes/markdown-pipe.ts`, always through `[innerHTML]`, whose sanitizer is the XSS filter).
-- No authentication in this phase, including `/admin`, which reveals pipelines. The top menu links to it on every
-  screen on purpose for now; hide those links from evaluators before collection. TODO: login. UI copy is **Portuguese (BR)**.
+- **Login is Keycloak SSO** (`auth/autenticacao.ts`, keycloak-angular, `login-required` + PKCE). Roles come from the
+  `smartgen` *client* (`resource_access`), not the realm: `user` evaluates, `admin` also manages (and can evaluate).
+  `exigeRole` + `data.roles` guards routes; the API re-checks everything. The `/admin` menu only renders for `admin`.
+  The bearer interceptor only matches `apiBaseUrl`, so **never point an `<iframe>`/`<a href>` at the API**: the PDF
+  and the CSV are fetched as blobs through `HttpClient`. UI copy is **Portuguese (BR)**.
 
 **Architecture (`src/app/`):**
 - `models/evaluation-model.ts` — domain types (`RagDocument`, `QuestionRound`, `PipelineAnswer`, `PerfilAvaliador`,
@@ -50,7 +53,8 @@ The results page is split in tabs kept in `?aba=`; every analysis sits in `compo
 - `components/` — `progress-badge/`, `progresso-etapas/`, `document-card/`, `chat-message/`, `answer-choice/` (reusable, `OnPush`).
 - `testing/api-rag-fake.ts` — stateful `ApiRag` double shared by the specs (the app is **zoneless**, so specs
   must yield the event loop once before asserting — see `estabilizar()` in `evaluation.spec.ts`).
-- `src/environments/environment.ts` — `apiBaseUrl` (must include `/api`).
+- `src/environments/environment.ts` (production) and `environment.development.ts` (`ng serve`, via `fileReplacements`) —
+  `apiBaseUrl` (must include `/api`) and the Keycloak URL/realm/client. Specs use `testing/keycloak-fake.ts`.
 
 **Visual system:** follows `DESIGN.md` (editorial serif layout, with the Procempa palette: white
 canvas, blue primary `#4264cd` — not the `#557cf2` of Procempa's buttons, which fails AA with white text). Tokens

@@ -12,21 +12,113 @@
     <span class="brand__text">Avaliação RAG</span>
   </a>
 
-  <nav class="menu" aria-label="Menu principal">
-    <div class="menu__grupo" role="group" aria-labelledby="menu-avaliador">
-      <span id="menu-avaliador" class="menu__rotulo">Avaliador</span>
-      <a routerLink="/" routerLinkActive="ativo" [routerLinkActiveOptions]="{ exact: true }">
+  <nav class="nav" aria-label="Menu principal">
+    <div class="trilho">
+      <a
+        class="trilho__item"
+        routerLink="/"
+        routerLinkActive="ativo"
+        [routerLinkActiveOptions]="{ exact: true }"
+        ariaCurrentWhenActive="page"
+      >
         Início
       </a>
-      <a routerLink="/documentos" routerLinkActive="ativo">Documentos</a>
-    </div>
-    <div class="menu__grupo" role="group" aria-labelledby="menu-admin">
-      <span id="menu-admin" class="menu__rotulo">Admin</span>
-      <a routerLink="/admin/estudos" routerLinkActive="ativo">Estudos</a>
-      <a routerLink="/admin/documentos" routerLinkActive="ativo">Documentos</a>
-      <a routerLink="/admin/pipelines" routerLinkActive="ativo">Pipelines</a>
+      <a
+        class="trilho__item"
+        routerLink="/documentos"
+        routerLinkActive="ativo"
+        ariaCurrentWhenActive="page"
+      >
+        Documentos
+      </a>
+
+      @if (admin) {
+        <span class="trilho__divisor" aria-hidden="true"></span>
+        <div class="suspenso">
+          <button
+            type="button"
+            class="trilho__item trilho__gatilho"
+            [class.ativo]="naAreaPesquisador()"
+            aria-haspopup="true"
+            [attr.aria-expanded]="aberto() === 'pesquisador'"
+            aria-controls="painel-pesquisador"
+            (click)="alternar('pesquisador')"
+          >
+            Pesquisador
+            <svg class="seta" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+              <path
+                d="M4 6l4 4 4-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+
+          @if (aberto() === 'pesquisador') {
+            <div id="painel-pesquisador" class="painel">
+              <p class="painel__rotulo">Área do pesquisador</p>
+              <ul class="painel__lista" role="list">
+                @for (item of itensPesquisador; track item.rota) {
+                  <li>
+                    <a
+                      class="painel__item"
+                      [routerLink]="item.rota"
+                      routerLinkActive="ativo"
+                      ariaCurrentWhenActive="page"
+                    >
+                      <span class="painel__titulo">{{ item.titulo }}</span>
+                      <span class="painel__descricao">{{ item.descricao }}</span>
+                    </a>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
+      }
     </div>
   </nav>
+
+  <div class="conta suspenso">
+    <button
+      type="button"
+      class="avatar"
+      [attr.aria-label]="'Conta de ' + (nome || 'usuário')"
+      aria-haspopup="true"
+      [attr.aria-expanded]="aberto() === 'conta'"
+      aria-controls="painel-conta"
+      (click)="alternar('conta')"
+    >
+      {{ iniciais }}
+    </button>
+
+    @if (aberto() === 'conta') {
+      <div id="painel-conta" class="painel painel--direita">
+        <div class="painel__cabecalho">
+          <span class="painel__nome">{{ nome }}</span>
+          @if (usuario && usuario !== nome) {
+            <span class="painel__usuario">{{ usuario }}</span>
+          }
+        </div>
+        <button type="button" class="painel__acao" (click)="sair()">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <path
+              d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11l3-3-3-3M13.5 8H6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          Sair
+        </button>
+      </div>
+    }
+  </div>
 </header>
 
 <main class="content">

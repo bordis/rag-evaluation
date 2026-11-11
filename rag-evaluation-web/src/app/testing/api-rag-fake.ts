@@ -65,8 +65,13 @@ export class ApiRagFake {
     return [...this.documentos];
   }
 
-  urlDoPdf(documentId: string): string {
-    return `http://api.teste/documents/${documentId}/arquivo`;
+  /** Ids dos PDFs pedidos, na ordem. */
+  readonly pdfsBaixados: string[] = [];
+
+  async baixarPdf(documentId: string): Promise<Blob> {
+    this.checar();
+    this.pdfsBaixados.push(documentId);
+    return new Blob(['%PDF-1.7'], { type: 'application/pdf' });
   }
 
   async obterProgresso(): Promise<ProgressoSessao> {
