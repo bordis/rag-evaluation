@@ -1,6 +1,13 @@
 from types import SimpleNamespace
 
-from app.rag.metricas_ragas import AvaliacaoRagas, MetricasRagas, avaliar_resposta
+from app.core.config import get_settings
+from app.rag.metricas_ragas import (
+    AvaliacaoRagas,
+    MetricasRagas,
+    argumentos_do_juiz,
+    avaliar_resposta,
+    cliente_do_juiz,
+)
 
 
 class MetricaFalsa:
@@ -40,3 +47,26 @@ async def test_relevancia_nao_recebe_os_contextos():
 
     assert fidelidade.argumentos["retrieved_contexts"] == ["contexto"]
     assert relevancia.argumentos == {"user_input": "pergunta", "response": "resposta"}
+
+
+def test_juiz_sem_raciocinio_desliga_o_pensamento_no_template():
+
+    settings = get_settings().model_copy(update={"ragas_llm_sem_raciocinio": True})
+
+    argumentos = argumentos_do_juiz(settings)
+
+    assert argumentos["extra_body"] == {"chat_template_kwargs": {"enable_thinking": False}}
+
+
+def test_juiz_padrao_nao_envia_parametros_fora_da_api_da_openai():
+
+    settings = get_settings().model_copy(update={"ragas_llm_sem_raciocinio": False})
+
+    assert "extra_body" not in argumentos_do_juiz(settings)
+
+
+def test_cliente_do_juiz_tem_tempo_limite():
+
+    settings = get_settings().model_copy(update={"ragas_timeout_seconds": 42})
+
+    assert cliente_do_juiz(settings).timeout == 42

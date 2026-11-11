@@ -165,6 +165,8 @@ RERANKER_KEY=
 RAGAS_LLM_MODEL=
 RAGAS_LLM_URL=https://seu-servico-do-juiz/v1
 RAGAS_LLM_KEY=
+RAGAS_LLM_SEM_RACIOCINIO=false
+RAGAS_TIMEOUT_SECONDS=120
 
 # RAG e limites do estudo
 RAG_SEARCH_LIMIT=15
@@ -199,6 +201,8 @@ mantenha-as no arquivo para deixar a configuração do estudo explícita.
 | `DOCLING_URL` / `DOCLING_TIMEOUT_SECONDS` | Endereço e timeout do docling-serve. |
 | `DOCLING_DO_OCR` | Mantenha `false`: os documentos são PDFs digitais, e o OCR tornaria o tempo de ingestão incomparável ao do parser raw. |
 | `RAGAS_LLM_MODEL` / `RAGAS_LLM_URL` / `RAGAS_LLM_KEY` | Modelo juiz do RAGAS, o endpoint dele (terminando em `/v1`) e a chave. O juiz é diferente do modelo de geração para evitar autopromoção. Sem `RAGAS_LLM_KEY`, vale `CHAT_API_KEY`. |
+| `RAGAS_LLM_SEM_RACIOCINIO` | `true` quando o juiz é um modelo de raciocínio servido por vLLM/SGLang (DeepSeek, Qwen): envia `chat_template_kwargs.enable_thinking=false`. Ligado, o juiz responde cerca de 7× mais rápido. Desligado, o raciocínio esgota o `max_tokens` nas respostas longas e a nota sai com `IncompleteOutputException`. Deixe `false` na API da OpenAI, que rejeita o parâmetro. |
+| `RAGAS_TIMEOUT_SECONDS` | Limite de cada chamada ao juiz. Sem ele, uma chamada sem resposta prenderia o lote por até 30 min. |
 | `RAG_SEARCH_LIMIT` / `RAG_ANCORAS` | Chunks entregues ao LLM e âncoras dos pipelines 3 e 4, na semeadura. |
 | `RERANKER_URL` / `RERANKER_KEY` | Endpoint completo do reordenador (`.../v1/rerank`) e a chave, enviada como `Authorization: Bearer`. O nome do modelo e os tokens gravados na telemetria vêm da resposta do serviço. |
 | `DOCLING_PDF_BACKEND` / `DOCLING_TABLE_MODE` | Backend de leitura do PDF e modo de extração de tabelas. Afetam o parser, um dos fatores do estudo: não altere depois de ingerir os documentos. |

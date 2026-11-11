@@ -70,6 +70,13 @@ class Settings(BaseSettings):
     ragas_llm_model: str = "gpt-4.1"
     ragas_llm_url: str = "https://api.openai.com/v1"
     ragas_llm_key: str = ""
+    # Juiz com raciocinio (DeepSeek, Qwen) gasta o max_tokens pensando e devolve conteudo vazio nas
+    # respostas longas, alem de ficar varias vezes mais lento. Liga `enable_thinking=False` no
+    # template do vLLM/SGLang; a API da OpenAI rejeita o parametro, por isso o padrao e desligado.
+    ragas_llm_sem_raciocinio: bool = False
+    # Por chamada ao juiz. Sem isso vale o padrao do SDK (600 s x 3 tentativas) e um lote parece
+    # travado por meia hora quando o servico deixa uma chamada sem resposta.
+    ragas_timeout_seconds: int = 120
 
     # RAG
     # Chunks entregues ao LLM nos 4 pipelines (decisao 4 da ficha).

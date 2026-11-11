@@ -21,7 +21,7 @@ from ragas.metrics.collections import (  # noqa: E402
     Faithfulness,
 )
 
-from app.core.config import get_settings  # noqa: E402
+from app.core.config import Settings, get_settings  # noqa: E402
 
 # Temperatura zero porque a nota precisa ser o mais reprodutivel possivel; o limite de tokens evita
 # truncar a extracao de afirmacoes de respostas longas, o que faria a fidelidade falhar.
@@ -43,17 +43,29 @@ class AvaliacaoRagas:
     precisao_contexto: float
 
 
+def cliente_do_juiz(settings: Settings) -> AsyncOpenAI:
+    return AsyncOpenAI(
+        api_key=settings.ragas_llm_key or settings.chat_api_key,
+        base_url=settings.ragas_llm_url,
+        timeout=settings.ragas_timeout_seconds,
+    )
+
+
+def argumentos_do_juiz(settings: Settings) -> dict:
+    """Vao direto para `chat.completions.create`: o ragas repassa o que nao reconhece."""
+    argumentos: dict = {"temperature": TEMPERATURA_JUIZ, "max_tokens": MAX_TOKENS_JUIZ}
+    if settings.ragas_llm_sem_raciocinio:
+        argumentos["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
+    return argumentos
+
+
 @lru_cache
 def criar_metricas() -> MetricasRagas:
     settings = get_settings()
     llm = llm_factory(
         settings.ragas_llm_model,
-        client=AsyncOpenAI(
-            api_key=settings.ragas_llm_key or settings.chat_api_key,
-            base_url=settings.ragas_llm_url,
-        ),
-        temperature=TEMPERATURA_JUIZ,
-        max_tokens=MAX_TOKENS_JUIZ,
+        client=cliente_do_juiz(settings),
+        **argumentos_do_juiz(settings),
     )
     embeddings = embedding_factory(
         "openai",
