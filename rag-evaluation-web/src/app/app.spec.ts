@@ -66,13 +66,13 @@ describe('App', () => {
     expect(compiled.querySelector('.painel')).toBeNull();
   });
 
-  it('logs out from the account panel back to the app origin', async () => {
+  it('logs out from the account panel back to the app base URL', async () => {
     const { compiled, clicar, saidas } = await montar([ROLE_AVALIADOR]);
 
     await clicar('.avatar');
     expect(compiled.querySelector('.painel__nome')?.textContent).toContain('maria.souza');
     await clicar('.painel__acao');
 
-    expect(saidas).toEqual([{ redirectUri: window.location.origin }]);
+    expect(saidas).toEqual([{ redirectUri: document.baseURI }]);
   });
 });

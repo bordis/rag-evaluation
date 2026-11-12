@@ -264,6 +264,10 @@ A URL da API fica em [`src/environments/environment.ts`](rag-evaluation-web/src/
 (`apiBaseUrl`, **com o sufixo `/api`**). Se você mudar a porta da API, mude ali — e lembre-se de
 manter a origem do front em `CORS_ORIGINS` no `.env` do backend.
 
+O front não depende de ser servido na raiz do host. Atrás de um proxy que publique o app sob um prefixo,
+removendo-o do path e enviando `X-Forwarded-Prefix`, o `<base href>` do `index.html` passa a ser esse
+prefixo. O login e o logout voltam para ele.
+
 ---
 
 # Gerenciamento (`/admin`)

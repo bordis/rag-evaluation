@@ -93,6 +93,6 @@ export class App {
   }
 
   protected sair(): void {
-    void this.keycloak.logout({ redirectUri: window.location.origin });
+    void this.keycloak.logout({ redirectUri: document.baseURI });
   }
 }

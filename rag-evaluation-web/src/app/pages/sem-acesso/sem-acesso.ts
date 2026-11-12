@@ -46,6 +46,6 @@ export class SemAcesso {
   private readonly keycloak = inject(Keycloak);
 
   protected sair(): void {
-    void this.keycloak.logout({ redirectUri: window.location.origin });
+    void this.keycloak.logout({ redirectUri: document.baseURI });
   }
 }
