@@ -21,6 +21,7 @@
           <th>#</th>
           <th>Pergunta</th>
           <th>Escolha do avaliador</th>
+          <th>Também corretas</th>
           <th>Melhor no RAGAS (média)</th>
         </tr>
       </thead>
@@ -30,6 +31,7 @@
             <td>{{ linha.ordem }}</td>
             <td>{{ linha.pergunta }}</td>
             <td>{{ linha.escolha }}</td>
+            <td>{{ linha.tambemCorretas }}</td>
             <td>{{ linha.melhorNoRagas }}</td>
           </tr>
         }
@@ -58,11 +60,19 @@
           <span class="adm-selo adm-selo--erro">Nenhuma está correta</span>
         } @else if (!atual.decidida) {
           <span class="adm-selo">Pendente</span>
+        } @else if (!atual.marcado_em) {
+          <span class="adm-selo">Marcação pendente</span>
         }
         Tempo total {{ segundos(atual.tempo_total_ms) }} · espera pela geração
         {{ segundos(atual.tempo_geracao_ms) }} · aba oculta
         {{ segundos(atual.tempo_oculto_ms) }}
       </p>
+      @if (atual.marcado_em) {
+        <p>
+          Marcação das outras respostas: {{ segundos(atual.tempo_marcacao_ms) }} · aba oculta
+          {{ segundos(atual.tempo_marcacao_oculto_ms) }}
+        </p>
+      }
       <button class="adm-btn" type="button" [disabled]="calculando()" (click)="calcularRagas()">
         @if (calculando()) {
           Calculando…
@@ -81,6 +91,8 @@
           </h3>
           @if (resposta.escolhida) {
             <span class="adm-selo adm-selo--ok">Escolhida</span>
+          } @else if (resposta.tambem_correta) {
+            <span class="adm-selo adm-selo--tambem">Também correta</span>
           }
           @if (melhorNoRagas(atual, resposta)) {
             <span class="adm-selo">Melhor no RAGAS</span>

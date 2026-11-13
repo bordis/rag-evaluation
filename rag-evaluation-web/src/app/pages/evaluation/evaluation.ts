@@ -20,7 +20,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AnswerChoice } from '../../components/answer-choice/answer-choice';
 import { ChatMessage } from '../../components/chat-message/chat-message';
 import { ProgressoEtapas } from '../../components/progresso-etapas/progresso-etapas';
-import type { RotuloCego } from '../../models/evaluation-model';
+import { aguardaMarcacao, rodadaCompleta, type RotuloCego } from '../../models/evaluation-model';
 import { ApiRag } from '../../services/api-rag';
 import { CronometroRodada } from '../../services/cronometro-rodada';
 import { EvaluationStore } from '../../services/evaluation-store';
@@ -31,8 +31,10 @@ const MIN_PERGUNTA = 3;
 /**
  * Tela principal: uma etapa por pergunta do documento. Cada pergunta é respondida por todos os
  * pipelines e apresentada às cegas (A/B/C/D); o avaliador escolhe a melhor ou indica que nenhuma
- * está correta, e a tela passa para a próxima, sem volta. O limite de perguntas é imposto pelo
- * servidor.
+ * está correta. Se escolheu uma, na mesma tela indica quais das outras também estão corretas; só
+ * então a tela passa para a próxima pergunta, sem volta. O passo vem da rodada vinda do servidor,
+ * então um F5 entre a escolha e a marcação retoma na marcação. O limite de perguntas é imposto
+ * pelo servidor.
  */
 @Component({
   selector: 'app-evaluation',
@@ -53,7 +55,8 @@ export class Evaluation implements OnDestroy {
   private readonly etapa = viewChild<ElementRef<HTMLElement>>('etapa');
   private readonly campoPergunta = viewChild<ElementRef<HTMLTextAreaElement>>('campoPergunta');
 
-  private escolhendo = false;
+  /** Trava contra duplo envio, na escolha e na confirmação da marcação. */
+  private enviando = false;
 
   /** Vem do parâmetro de rota `:docId` via componentInputBinding — é o `slug` do documento. */
   readonly docId = input.required<string>();
@@ -78,18 +81,21 @@ export class Evaluation implements OnDestroy {
   protected readonly erroPdf = signal(false);
   private urlBlob: string | null = null;
   private readonly rounds = computed(() => this.store.rounds(this.docId()));
-  protected readonly decididas = computed(() => this.rounds().filter((item) => item.escolhidoEm));
+  /** Rodadas encerradas: com a escolha e, quando houve vencedora, com a marcação das outras. */
+  protected readonly completas = computed(() => this.rounds().filter(rodadaCompleta));
+  /** Sem escolha ou esperando a marcação: as duas ficam na mesma tela das respostas. */
   protected readonly rodadaPendente = computed(() =>
-    this.rounds().find((item) => !item.escolhidoEm),
+    this.rounds().find((item) => !rodadaCompleta(item)),
   );
   protected readonly concluido = computed(() => this.store.isComplete(this.docId()));
 
   protected readonly tela = computed(() => {
-    if (this.concluido()) {
-      return 'concluido';
-    }
+    // Antes do "concluído": a última rodada já conta no limite, mas ainda pode faltar a marcação.
     if (this.rodadaPendente()) {
       return 'respostas';
+    }
+    if (this.concluido()) {
+      return 'concluido';
     }
     if (this.gerando()) {
       return 'gerando';
@@ -97,7 +103,8 @@ export class Evaluation implements OnDestroy {
     return this.carregando() ? 'carregando' : 'pergunta';
   });
 
-  private readonly chaveDaTela = computed(() => `${this.tela()}-${this.decididas().length}`);
+  // A escolha não muda a chave: o segundo passo é a mesma tela, sem a animação de entrada.
+  private readonly chaveDaTela = computed(() => `${this.tela()}-${this.completas().length}`);
 
   /** Só é possível perguntar com texto suficiente, na tela de pergunta. */
   protected readonly podePerguntar = computed(
@@ -172,14 +179,31 @@ export class Evaluation implements OnDestroy {
 
   protected async escolher(roundId: string, rotulo: RotuloCego | null): Promise<void> {
     // Um segundo clique antes da resposta do servidor viraria um 409 na tela.
-    if (this.escolhendo) {
+    if (this.enviando) {
       return;
     }
-    this.escolhendo = true;
+    this.enviando = true;
     try {
       await this.store.chooseAnswer(this.docId(), roundId, rotulo);
     } finally {
-      this.escolhendo = false;
+      this.enviando = false;
+    }
+    // Com uma vencedora, a tela fica para a marcação, e o componente leva o foco à pergunta.
+    const rodada = this.rounds().find((item) => item.id === roundId);
+    if (!this.erro() && rodada && !aguardaMarcacao(rodada)) {
+      this.irParaOTopo();
+    }
+  }
+
+  protected async confirmarMarcacao(roundId: string, rotulos: RotuloCego[]): Promise<void> {
+    if (this.enviando) {
+      return;
+    }
+    this.enviando = true;
+    try {
+      await this.store.confirmarTambemCorretas(this.docId(), roundId, rotulos);
+    } finally {
+      this.enviando = false;
     }
     if (!this.erro()) {
       this.irParaOTopo();

@@ -129,6 +129,135 @@
   }
 }
 
+/* Segundo passo: a escolhida fica com o anel azul e o selo; as marcadas como também corretas
+   ganham o fundo azul-claro, para o avaliador ver de relance o que vai confirmar. */
+.answer--marcada {
+  background-color: var(--color-surface-card);
+  border-color: var(--color-primary);
+}
+
+.answer__chip--tambem {
+  border: 1px solid var(--color-primary);
+  background-color: var(--color-surface-card);
+  color: var(--color-heading);
+}
+
+.marcacao {
+  /* Sem isto o fieldset não encolhe abaixo do conteúdo e a grade não quebra em uma coluna. */
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.marcacao__pergunta {
+  margin-bottom: var(--space-xxs);
+  padding: 0;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--color-heading);
+}
+
+/* Recebe o foco por script, para o leitor de tela anunciar o passo; não é um controle. */
+.marcacao__pergunta:focus {
+  outline: none;
+}
+
+.marcacao__dica {
+  margin: 0 0 var(--space-md);
+  font-size: 14px;
+  color: var(--color-body);
+}
+
+.answer__marca,
+.nenhuma-outra {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 40px;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.answer__marca {
+  align-self: flex-start;
+}
+
+.answer__marca:hover,
+.nenhuma-outra:hover {
+  border-color: var(--color-primary);
+}
+
+.caixa {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.caixa:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  outline-offset: 2px;
+}
+
+/* Fica preso ao pé da tela enquanto as respostas passam: com quatro textos longos, confirmar não
+   pode exigir rolar até o fim. */
+.marcacao__fim {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface-soft);
+  box-shadow: var(--shadow-soft);
+}
+
+.confirmar {
+  min-height: 40px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.confirmar:hover:not(:disabled) {
+  background-color: var(--color-primary-active);
+}
+
+.confirmar:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  outline-offset: 2px;
+}
+
+.confirmar:disabled {
+  background-color: var(--color-primary-disabled);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
 .nenhuma {
   display: block;
   width: 100%;

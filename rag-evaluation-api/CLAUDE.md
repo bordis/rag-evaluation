@@ -87,6 +87,18 @@ identical across all four on purpose; varying them would confound the variables.
   collection, so changing the index or chunking means dropping collections and re-ingesting.
 - **`milvus_id` is `BigInteger`:** Milvus auto IDs use all 64 bits. Doubles must use real-sized IDs.
 - **A round is decided when `escolhido_em` is set**, not when `escolha_answer_id` is: "none is correct" has no answer.
+- **Decided ≠ complete.** After choosing a winner, the evaluator marks which of the *other* three are
+  also correct (`POST /rounds/{id}/also-correct`, `{"rotulos": [...]}`, `[]` = none of the others).
+  Complete = decided and (`nenhuma_correta` or `marcado_em`). `rodada_pendente` returns any round that is
+  not complete, so a new question gets 409 between the two steps; everything that *counts*
+  (`MAX_PERGUNTAS`, progress, studies, RAGAS, the main analysis) still uses `escolhido_em`. "None is
+  correct" has no second step. `pipeline_answers.tambem_correta` is True/False on the three non-chosen
+  answers and NULL on the winner (not measured). `RodadaDetalhe` exposes `tambem_corretas` (sorted labels,
+  `None` until measured) and `marcado_em`. Marking times (`tempo_marcacao_ms`, `tempo_marcacao_oculto_ms`)
+  are **not** part of `tempo_total_ms`/`tempo_ativo_ms`.
+- **`correta` (CSV, `resposta_correta`) is NULL for every row of a winner round not yet marked,** winner
+  included: keeping only those winners would inflate the correctness rate. The rate (`taxa_correcao`)
+  uses all four answers of complete rounds, so it is secondary and doesn't replace the winner-based tests.
 - **Effects are binary tests on the winning answer** (`services/analise.py`), which avoids the dependence between the
   four answers of a round.
 - **Power is computed for a range of plausible rates, never from the observed effect** (post-hoc power is a known
@@ -128,7 +140,7 @@ identical across all four on purpose; varying them would confound the variables.
 - `schemas/` — Pydantic request/response models, kept **separate** from table models; that separation is what
   guarantees the blind.
 - `api/routers/` — one router per domain: `health.py`, `documents.py`, `sessions.py` (one session per login +
-  progress), `evaluation.py` (question, history, choice), `studies.py`, `pipelines.py` and `admin.py` (researcher views).
+  progress), `evaluation.py` (question, history, choice, also-correct), `studies.py`, `pipelines.py` and `admin.py` (researcher views).
 - `rag/` — one file per ingestion stage: `chunking.py`, `parsing/` (`base.py`, `raw.py`, `docling.py`),
   `embedding.py`, `indexing.py`. Each is testable on its own with no infrastructure running.
 - `services/ingestion.py` — the orchestrator. It reads `parser` and `collection_name` from the database and never
@@ -139,7 +151,12 @@ identical across all four on purpose; varying them would confound the variables.
   answers, per-stage metrics and retrieved chunks. `DependenciasDeAvaliacao` mirrors the ingestion pattern;
   `tests/fakes.py` holds the shared doubles.
 - `telemetry/recorder.py` — `Cronometro`, the per-stage stopwatch.
-- `services/analise.py` — pure analysis functions plus the study queries. `analise/modelo_misto.R` fits the mixed model.
+- `services/analise.py` — pure analysis functions plus the study queries. `analise/modelo_misto.R` fits the mixed model
+  (plus an exploratory per-answer `correta ~ docling * avancado` with avaliador/documento/rodada effects).
+  Second-step keys in `analisar_estudo`: `taxa_correcao`, `marcacao_por_posicao` (chi-square of homogeneity,
+  3 df: the denominator per position varies because the winner's position drops out),
+  `marcacao_por_avaliador` (all-or-nothing marking flags automatic answering), and
+  `por_ordem[].tempo_marcacao_ativo_mediano_ms`. CSV columns are only ever **appended** at the end.
 - `seed.py` — idempotent seeding of the four pipelines; never overwrites an edited config.
 
 ## Commands

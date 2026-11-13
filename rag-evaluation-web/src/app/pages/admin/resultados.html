@@ -170,6 +170,52 @@
       </app-analise-cartao>
 
       <app-analise-cartao
+        titulo="Taxa de correção"
+        subtitulo="Respostas corretas de cada pipeline, contando as quatro de cada rodada"
+        [ajuda]="ajuda.correcao"
+      >
+        @if (stats.taxa_correcao.rodadas_completas) {
+          <app-grafico-intervalos
+            [linhas]="linhasCorrecao()"
+            rotuloReferencia="Traço: IC 95% por bootstrap de avaliadores."
+          />
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Pipeline</th>
+                  <th>Corretas</th>
+                  <th>Taxa</th>
+                  <th>IC 95% (Wilson)</th>
+                  <th>IC 95%: avaliadores</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of stats.taxa_correcao.por_pipeline; track item.codigo) {
+                  <tr>
+                    <td>{{ pipeline(item.codigo) }}</td>
+                    <td>{{ item.sucessos }} / {{ item.total }}</td>
+                    <td>{{ pct(item.taxa) }}</td>
+                    <td>{{ ic(item.ic95) }}</td>
+                    <td>{{ ic(item.ic95_bootstrap) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="vazio">Ainda sem rodadas completas.</p>
+        }
+        <p class="adm-pequeno">
+          {{ stats.taxa_correcao.rodadas_completas }} rodadas completas.
+          @if (stats.taxa_correcao.decididas_sem_marcacao) {
+            {{ stats.taxa_correcao.decididas_sem_marcacao }} rodada(s) com vencedora ainda sem a
+            marcação das outras ficam fora desta conta.
+          }
+        </p>
+      </app-analise-cartao>
+
+      <app-analise-cartao
         titulo="Efeitos da ingestão, da recuperação e interação"
         subtitulo="Hipóteses H1 a H3, contra 50%"
         [ajuda]="ajuda.efeitos"
@@ -429,6 +475,32 @@
       </app-analise-cartao>
 
       <app-analise-cartao
+        titulo="Marcação por posição"
+        subtitulo="A posição exibida influenciou a marcação das outras respostas?"
+        [ajuda]="ajuda.marcacaoPosicao"
+      >
+        @if (stats.marcacao_por_posicao.respostas) {
+          <app-grafico-intervalos
+            [linhas]="linhasMarcacaoPosicao()"
+            [referencia]="marcacaoMedia()"
+            [rotuloReferencia]="
+              'Média geral: ' + pct(marcacaoMedia()) + '. Traço: IC 95% (Wilson).'
+            "
+          />
+          <p class="adm-pequeno">
+            {{ stats.marcacao_por_posicao.respostas }} respostas não escolhidas, em rodadas
+            marcadas.
+            @if (stats.marcacao_por_posicao.teste; as teste) {
+              Qui-quadrado de homogeneidade: {{ num(teste.qui2, 2) }} com {{ teste.gl }} graus de
+              liberdade; p = {{ p(teste.p_valor) }}.
+            }
+          </p>
+        } @else {
+          <p class="vazio">Ainda sem rodadas marcadas.</p>
+        }
+      </app-analise-cartao>
+
+      <app-analise-cartao
         titulo="Equilíbrio do sorteio"
         subtitulo="Vezes que cada pipeline apareceu em cada posição"
         [ajuda]="ajuda.sorteio"
@@ -542,6 +614,7 @@
                     <th>ms por mil caracteres</th>
                     <th>Posição 1</th>
                     <th>Avançada</th>
+                    <th>Marcação (mediana)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -556,6 +629,7 @@
                       <td>{{ num(item.ms_por_mil_caracteres) }}</td>
                       <td>{{ pct(item.taxa_posicao_1, 0) }}</td>
                       <td>{{ pct(item.taxa_avancado, 0) }}</td>
+                      <td>{{ segundos(item.tempo_marcacao_ativo_mediano_ms) }}</td>
                     </tr>
                   }
                 </tbody>
@@ -715,6 +789,41 @@
             </tbody>
           </table>
         </div>
+      </app-analise-cartao>
+
+      <app-analise-cartao
+        titulo="Marcação por avaliador"
+        subtitulo="Quem marca sempre todas ou nunca nenhuma"
+        [ajuda]="ajuda.marcacaoAvaliador"
+      >
+        @if (stats.marcacao_por_avaliador.length) {
+          <div class="adm-rolagem">
+            <table class="adm-tabela">
+              <thead>
+                <tr>
+                  <th>Avaliador</th>
+                  <th>Rodadas marcadas</th>
+                  <th>Marcou todas as outras</th>
+                  <th>Não marcou nenhuma</th>
+                  <th>Outras marcadas (média)</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of stats.marcacao_por_avaliador; track item.avaliador) {
+                  <tr>
+                    <td [title]="item.avaliador">Avaliador {{ item.numero }}</td>
+                    <td>{{ item.rodadas_marcadas }}</td>
+                    <td>{{ item.todas_marcadas }} ({{ pct(item.taxa_todas_marcadas, 0) }})</td>
+                    <td>{{ item.nenhuma_marcada }} ({{ pct(item.taxa_nenhuma_marcada, 0) }})</td>
+                    <td>{{ num(item.outras_marcadas_media, 1) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="vazio">Ainda sem rodadas marcadas.</p>
+        }
       </app-analise-cartao>
 
       <app-analise-cartao

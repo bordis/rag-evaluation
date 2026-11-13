@@ -34,3 +34,17 @@ fadiga <- glmer(
 )
 cat("\n== Fadiga (h2 ~ ordem) ==\n")
 print(summary(fadiga)$coefficients)
+
+# Exploratorio, medida secundaria: a taxa de correcao por resposta (segundo passo da rodada).
+# `correta ~ ingestao * recuperacao`, com os nomes de coluna do CSV (docling, avancado). Aqui cada
+# rodada contribui com quatro linhas que nao sao independentes, dai o efeito aleatorio de rodada.
+# Celula vazia em `correta` (rodada com vencedora ainda sem marcacao) vira NA e fica de fora.
+respostas <- subset(dados, !is.na(correta))
+correcao <- glmer(
+  correta ~ docling * avancado + (1 | avaliador) + (1 | documento) + (1 | rodada),
+  data = respostas,
+  family = binomial
+)
+cat("\n== Exploratorio: correta ~ docling * avancado (por resposta) ==\n")
+cat("Linhas com correta medida:", nrow(respostas), "de", nrow(dados), "\n")
+print(summary(correcao)$coefficients)

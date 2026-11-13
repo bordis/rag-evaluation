@@ -181,6 +181,27 @@ export class AdminResultados {
       ic: item.ic95,
     })),
   );
+  /** As quatro respostas de uma rodada não são independentes: o traço é o bootstrap por avaliador. */
+  protected readonly linhasCorrecao = computed<LinhaIntervalo[]>(() =>
+    (this.dados()?.taxa_correcao.por_pipeline ?? []).map((item) => ({
+      rotulo: this.pipeline(item.codigo),
+      valor: item.taxa,
+      ic: item.ic95_bootstrap,
+    })),
+  );
+  protected readonly linhasMarcacaoPosicao = computed<LinhaIntervalo[]>(() =>
+    (this.dados()?.marcacao_por_posicao.por_posicao ?? []).map((item) => ({
+      rotulo: `Posição ${item.posicao}`,
+      valor: item.taxa,
+      ic: item.ic95,
+    })),
+  );
+  /** Taxa média de marcação entre as não escolhidas: a referência do gráfico por posição. */
+  protected readonly marcacaoMedia = computed(() => {
+    const posicoes = this.dados()?.marcacao_por_posicao.por_posicao ?? [];
+    const total = posicoes.reduce((soma, item) => soma + item.total, 0);
+    return total ? posicoes.reduce((soma, item) => soma + item.sucessos, 0) / total : null;
+  });
   protected readonly linhasConcordancia = computed<LinhaIntervalo[]>(() =>
     (this.dados()?.ragas.concordancia ?? []).map((item) => ({
       rotulo: this.metrica(item.metrica),
@@ -362,6 +383,13 @@ export class AdminResultados {
     if (dados.teste_posicao && dados.teste_posicao.p_valor < ALFA) {
       alertas.push({
         texto: `As escolhas dependem da posição exibida (p ${this.p(dados.teste_posicao.p_valor)}).`,
+        aba: 'validade',
+      });
+    }
+    const testeMarcacao = dados.marcacao_por_posicao.teste;
+    if (testeMarcacao && testeMarcacao.p_valor < ALFA) {
+      alertas.push({
+        texto: `A marcação das outras respostas depende da posição exibida (p ${this.p(testeMarcacao.p_valor)}).`,
         aba: 'validade',
       });
     }

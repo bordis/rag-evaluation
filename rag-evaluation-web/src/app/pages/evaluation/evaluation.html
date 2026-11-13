@@ -21,7 +21,7 @@
     </header>
 
     <div class="progresso">
-      <app-progresso-etapas [total]="maxPerguntas()" [respondidas]="decididas().length" />
+      <app-progresso-etapas [total]="maxPerguntas()" [respondidas]="completas().length" />
     </div>
 
     @if (erro(); as mensagem) {
@@ -56,6 +56,7 @@
             <app-answer-choice
               [round]="rodada"
               (escolher)="escolher(rodada.id, $event)"
+              (confirmarMarcacao)="confirmarMarcacao(rodada.id, $event)"
               (respostaVista)="registrarVista($event)"
             />
           }
@@ -66,20 +67,18 @@
             <span class="pensando__dots" aria-hidden="true">
               <span></span><span></span><span></span>
             </span>
-            <p class="pensando__text">
-              Gerando as respostas… isso pode levar cerca de um minuto.
-            </p>
+            <p class="pensando__text">Gerando as respostas… isso pode levar cerca de um minuto.</p>
           </div>
         }
         @case ('carregando') {
           <p class="pensando__text" role="status">Carregando suas perguntas…</p>
         }
         @default {
-          @if (decididas().length === 0) {
+          @if (completas().length === 0) {
             <p class="empty__text">
               Faça sua primeira pergunta sobre <strong>{{ doc.titulo }}</strong
               >. Você receberá respostas anônimas e escolherá a melhor, ou indicará que nenhuma está
-              correta.
+              correta. Depois de escolher, dirá quais das outras também estão corretas.
             </p>
           }
           <div class="composer">

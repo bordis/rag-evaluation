@@ -52,6 +52,18 @@ function descreverEscolha(rodada: RodadaAdmin): string {
   return escolhida ? nomeDaResposta(escolhida) : 'Pendente';
 }
 
+/** O segundo passo: as outras respostas que o avaliador também considerou corretas. */
+function descreverTambemCorretas(rodada: RodadaAdmin): string {
+  if (!rodada.decidida || rodada.nenhuma_correta) {
+    return '—';
+  }
+  if (!rodada.marcado_em) {
+    return 'Marcação pendente';
+  }
+  const marcadas = rodada.respostas.filter((resposta) => resposta.tambem_correta);
+  return marcadas.length ? marcadas.map(nomeDaResposta).join(', ') : 'Nenhuma outra';
+}
+
 function descreverMelhorNoRagas(rodada: RodadaAdmin): string {
   const melhores = melhoresNoRagas(rodada);
   if (melhores.length === 0) {
@@ -61,7 +73,10 @@ function descreverMelhorNoRagas(rodada: RodadaAdmin): string {
   return melhores.length > 1 ? `Empate: ${nomes}` : nomes;
 }
 
-/** Navega nas perguntas de um ciclo: respostas, escolha, trechos por etapa, tempos e RAGAS. */
+/**
+ * Navega nas perguntas de um ciclo: respostas, escolha, outras marcadas como também corretas,
+ * trechos por etapa, tempos e RAGAS.
+ */
 @Component({
   selector: 'app-admin-avaliacao-detalhe',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -86,6 +101,7 @@ export class AdminAvaliacaoDetalhe {
       ordem: rodada.ordem,
       pergunta: rodada.pergunta,
       escolha: descreverEscolha(rodada),
+      tambemCorretas: descreverTambemCorretas(rodada),
       melhorNoRagas: descreverMelhorNoRagas(rodada),
     })),
   );

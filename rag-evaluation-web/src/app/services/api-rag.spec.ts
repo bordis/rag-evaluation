@@ -128,6 +128,86 @@ describe('ApiRag', () => {
     await expect(promessa).resolves.toMatchObject({ nenhumaCorreta: true });
   });
 
+  it('posts which other answers are also correct, with the marking time', async () => {
+    // Act
+    const promessa = api.marcarTambemCorretas('rodada-1', ['B', 'D'], {
+      totalMs: 4200,
+      ocultoMs: 300,
+    });
+    const requisicao = http.expectOne(`${base}/rounds/rodada-1/also-correct`);
+    requisicao.flush({
+      id: 'rodada-1',
+      ordem: 1,
+      pergunta: 'P?',
+      respostas: [],
+      escolha_rotulo: 'A',
+      nenhuma_correta: false,
+      escolhido_em: '2026-10-30T10:00:00Z',
+      tambem_corretas: ['B', 'D'],
+      marcado_em: '2026-10-30T10:00:05Z',
+    });
+
+    // Assert
+    expect(requisicao.request.method).toBe('POST');
+    expect(requisicao.request.body).toEqual({
+      rotulos: ['B', 'D'],
+      tempo_marcacao_ms: 4200,
+      tempo_marcacao_oculto_ms: 300,
+    });
+    await expect(promessa).resolves.toMatchObject({
+      tambemCorretas: ['B', 'D'],
+      marcadoEm: '2026-10-30T10:00:05Z',
+    });
+  });
+
+  it('sends an empty list and null times when nothing else is correct and time was lost', async () => {
+    // Act
+    const promessa = api.marcarTambemCorretas('rodada-1', []);
+    const requisicao = http.expectOne(`${base}/rounds/rodada-1/also-correct`);
+    requisicao.flush({
+      id: 'rodada-1',
+      ordem: 1,
+      pergunta: 'P?',
+      respostas: [],
+      escolha_rotulo: 'A',
+      nenhuma_correta: false,
+      escolhido_em: '2026-10-30T10:00:00Z',
+      tambem_corretas: [],
+      marcado_em: '2026-10-30T10:00:05Z',
+    });
+
+    // Assert
+    expect(requisicao.request.body).toEqual({
+      rotulos: [],
+      tempo_marcacao_ms: null,
+      tempo_marcacao_oculto_ms: null,
+    });
+    await expect(promessa).resolves.toMatchObject({ tambemCorretas: [] });
+  });
+
+  it('keeps a decided round without marking as "not measured yet"', async () => {
+    // Act
+    const promessa = api.listarRodadas('sessao-1', 'lgpd');
+    http.expectOne(`${base}/sessions/sessao-1/documents/lgpd/rounds`).flush([
+      {
+        id: 'rodada-1',
+        ordem: 1,
+        pergunta: 'P?',
+        respostas: [],
+        escolha_rotulo: 'C',
+        nenhuma_correta: false,
+        escolhido_em: '2026-10-30T10:00:00Z',
+        tambem_corretas: null,
+        marcado_em: null,
+      },
+    ]);
+    const [rodada] = await promessa;
+
+    // Assert
+    expect(rodada.tambemCorretas).toBeUndefined();
+    expect(rodada.marcadoEm).toBeUndefined();
+  });
+
   it('turns the API detail into the message shown to the evaluator', async () => {
     // Act
     const promessa = api.escolher('rodada-1', 'A');

@@ -19,14 +19,20 @@ from app.services.analise import (
     faixas_de_posicao,
     holm,
     kendall_tau,
+    marcacao_por_posicao,
     percentil,
     poder_exato,
+    qui_quadrado_homogeneidade,
     qui_quadrado_uniforme,
+    resposta_correta,
     resumir_contexto,
     resumo_avaliadores,
     resumo_da_coleta,
     spearman,
+    taxa_de_correcao,
     tempo_ativo_ms,
+    tempo_marcacao_ativo_ms,
+    uniformidade_da_marcacao,
     vies_de_tamanho,
     wilson,
 )
@@ -418,3 +424,133 @@ def test_erros_separam_triagem_de_causa_confirmada():
 
     assert erros["causas_confirmadas"][0]["causas"] == {"conversao": 1}
     assert erros["casos"][0]["anotacoes"]["pipeline-1"]["causa"] == "conversao"
+
+
+# Segundo passo: a marcacao das outras respostas corretas
+
+POSICOES = {codigo: numero for numero, codigo in enumerate(CODIGOS, start=1)}
+
+
+def _marcada(
+    vencedor: str | None,
+    corretas: tuple[str, ...] = (),
+    *,
+    marcado: bool = True,
+    avaliador=AVALIADOR,
+    ordem: int = 1,
+    tempo_marcacao_ms: int | None = None,
+    tempo_marcacao_oculto_ms: int | None = None,
+) -> Rodada:
+    """Rodada com as quatro respostas em posicoes fixas: pipeline-N na posicao N."""
+    return replace(
+        _rodada(vencedor, posicao=POSICOES.get(vencedor, 1), avaliador=avaliador, ordem=ordem),
+        posicoes=dict(POSICOES),
+        marcado=marcado and vencedor is not None,
+        tambem_corretas=corretas,
+        tempo_marcacao_ms=tempo_marcacao_ms,
+        tempo_marcacao_oculto_ms=tempo_marcacao_oculto_ms,
+    )
+
+
+def test_resposta_correta_segue_a_definicao_do_csv():
+    assert resposta_correta(nenhuma=False, venceu=True, marcado=True, tambem_correta=None) is True
+    assert resposta_correta(nenhuma=False, venceu=False, marcado=True, tambem_correta=True) is True
+    assert (
+        resposta_correta(nenhuma=False, venceu=False, marcado=True, tambem_correta=False) is False
+    )
+    assert resposta_correta(nenhuma=True, venceu=False, marcado=False, tambem_correta=None) is False
+    # Vencedora ainda sem marcacao: a rodada inteira fica sem medida, inclusive a vencedora.
+    assert resposta_correta(nenhuma=False, venceu=False, marcado=False, tambem_correta=None) is None
+    assert resposta_correta(nenhuma=False, venceu=True, marcado=False, tambem_correta=None) is None
+
+
+def test_taxa_de_correcao_conta_rodadas_completas_e_nenhuma_como_quatro_erros():
+    rodadas = [
+        _marcada("pipeline-4", ("pipeline-2",)),
+        _marcada("pipeline-4", ()),
+        _marcada(None),
+        # Decidida sem marcacao: fica fora do denominador, reportada a parte.
+        _marcada("pipeline-1", marcado=False),
+    ]
+
+    correcao = taxa_de_correcao(rodadas, CODIGOS)
+
+    assert correcao["rodadas_completas"] == 3
+    assert correcao["decididas_sem_marcacao"] == 1
+    por_codigo = {item["codigo"]: item for item in correcao["por_pipeline"]}
+    assert (por_codigo["pipeline-4"]["sucessos"], por_codigo["pipeline-4"]["total"]) == (2, 3)
+    assert (por_codigo["pipeline-2"]["sucessos"], por_codigo["pipeline-2"]["total"]) == (1, 3)
+    assert por_codigo["pipeline-1"]["sucessos"] == 0
+    assert por_codigo["pipeline-4"]["ic95"] == wilson(2, 3)
+
+
+def test_taxa_de_correcao_sem_rodada_completa_nao_quebra():
+    correcao = taxa_de_correcao([_marcada("pipeline-1", marcado=False)], CODIGOS)
+
+    assert correcao["rodadas_completas"] == 0
+    assert all(item["taxa"] is None for item in correcao["por_pipeline"])
+
+
+def test_marcacao_por_posicao_olha_so_as_nao_escolhidas_das_rodadas_marcadas():
+    rodadas = [
+        _marcada("pipeline-1", ("pipeline-2",)),  # posicoes 2, 3, 4: marca a 2
+        _marcada("pipeline-4", ("pipeline-1", "pipeline-2")),  # posicoes 1, 2, 3: marca 1 e 2
+        _marcada(None),
+        _marcada("pipeline-3", marcado=False),
+    ]
+
+    resultado = marcacao_por_posicao(rodadas)
+
+    assert resultado["respostas"] == 6
+    contagens = [(item["sucessos"], item["total"]) for item in resultado["por_posicao"]]
+    assert contagens == [(1, 1), (2, 2), (0, 2), (0, 1)]
+    assert resultado["teste"]["gl"] == 3
+
+
+def test_qui_quadrado_de_homogeneidade_bate_com_a_tabela():
+    # Mesma proporcao nas quatro posicoes: nenhuma diferenca.
+    assert qui_quadrado_homogeneidade([5, 5, 5, 5], [10, 10, 10, 10])["p_valor"] == pytest.approx(
+        1.0
+    )
+    # Tabela 2x4 [[20, 10, 10, 10], [5, 15, 15, 15]]: qui2 = 12,0 com 3 gl, p = 0,0074.
+    teste = qui_quadrado_homogeneidade([20, 10, 10, 10], [25, 25, 25, 25])
+    assert teste["qui2"] == pytest.approx(12.0)
+    assert teste["p_valor"] == pytest.approx(0.0074, abs=0.0002)
+    assert qui_quadrado_homogeneidade([0, 0, 0, 0], [3, 3, 3, 3]) is None
+    assert qui_quadrado_homogeneidade([0, 0, 0, 0], [0, 0, 0, 0]) is None
+
+
+def test_uniformidade_da_marcacao_sinaliza_quem_marca_tudo_ou_nada():
+    tudo, nada = uuid.uuid4(), uuid.uuid4()
+    outros = ("pipeline-2", "pipeline-3", "pipeline-4")
+    rodadas = [_marcada("pipeline-1", outros, avaliador=tudo) for _ in range(3)]
+    rodadas += [_marcada("pipeline-1", (), avaliador=nada) for _ in range(2)]
+    rodadas += [_marcada("pipeline-1", ("pipeline-2",), avaliador=nada)]
+    rodadas += [_marcada(None, avaliador=nada)]
+
+    por_avaliador = {item["avaliador"]: item for item in uniformidade_da_marcacao(rodadas)}
+
+    assert por_avaliador[tudo]["rodadas_marcadas"] == 3
+    assert por_avaliador[tudo]["todas_marcadas"] == 3
+    assert por_avaliador[tudo]["nenhuma_marcada"] == 0
+    assert por_avaliador[nada]["rodadas_marcadas"] == 3
+    assert por_avaliador[nada]["nenhuma_marcada"] == 2
+    assert por_avaliador[nada]["taxa_nenhuma_marcada"] == pytest.approx(2 / 3)
+    # Mesma numeracao do resumo por avaliador.
+    numeros = {item["avaliador"]: item["numero"] for item in resumo_avaliadores(rodadas)}
+    assert por_avaliador[nada]["numero"] == numeros[nada]
+
+
+def test_por_ordem_traz_o_tempo_mediano_de_marcacao_sem_a_aba_oculta():
+    rodadas = [
+        _marcada("pipeline-1", tempo_marcacao_ms=10000, tempo_marcacao_oculto_ms=2000),
+        _marcada("pipeline-2", tempo_marcacao_ms=4000),
+        _marcada(None),
+        _marcada("pipeline-1", ordem=2),
+    ]
+
+    primeira, segunda = analisar_escolhas(rodadas, CODIGOS)["por_ordem"]
+
+    assert primeira["tempo_marcacao_ativo_mediano_ms"] == 6000
+    assert segunda["tempo_marcacao_ativo_mediano_ms"] is None
+    assert tempo_marcacao_ativo_ms(rodadas[0]) == 8000

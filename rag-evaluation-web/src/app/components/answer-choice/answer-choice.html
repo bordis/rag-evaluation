@@ -3,6 +3,9 @@
   <p class="intro__text">
     @if (round().nenhumaCorreta) {
       Você indicou que <strong>nenhuma resposta está correta</strong>. Obrigado!
+    } @else if (etapa() === 'marcacao') {
+      Você escolheu a <strong>Resposta {{ round().escolhaRotulo }}</strong> como a melhor. Falta só
+      mais uma coisa.
     } @else if (decidida()) {
       Você escolheu a <strong>Resposta {{ round().escolhaRotulo }}</strong
       >. Obrigado!
@@ -13,43 +16,99 @@
   </p>
 </div>
 
-<ul class="grid" role="list">
-  @for (resposta of round().respostas; track resposta.rotuloCego) {
-    <li
-      class="answer surgir"
-      [attr.data-rotulo]="resposta.rotuloCego"
-      [style.--ordem]="$index + 1"
-      [class.answer--chosen]="round().escolhaRotulo === resposta.rotuloCego"
-      [class.answer--dimmed]="decidida() && round().escolhaRotulo !== resposta.rotuloCego"
-    >
-      <div class="answer__head">
-        <span class="answer__label">Resposta {{ resposta.rotuloCego }}</span>
-        @if (round().escolhaRotulo === resposta.rotuloCego) {
-          <span class="answer__chip">Escolhida</span>
-        }
-      </div>
+@if (etapa() === 'marcacao') {
+  <fieldset class="marcacao">
+    <legend #perguntaMarcacao class="marcacao__pergunta font-display" tabindex="-1">
+      Alguma das outras respostas também está correta?
+    </legend>
+    <p class="marcacao__dica">
+      Marque todas as que também estiverem corretas, ou indique que nenhuma outra está. A sua
+      escolha da melhor não muda.
+    </p>
 
-      <div class="answer__text md" [innerHTML]="resposta.texto | markdown"></div>
+    <ng-container [ngTemplateOutlet]="lista" />
 
-      <button
-        type="button"
-        class="answer__btn"
-        [disabled]="decidida()"
-        (click)="onEscolher(resposta.rotuloCego)"
-      >
-        Escolher esta
+    <div class="marcacao__fim">
+      <label class="nenhuma-outra" [for]="'nenhuma-outra-' + round().id">
+        <input
+          type="checkbox"
+          class="caixa"
+          [id]="'nenhuma-outra-' + round().id"
+          [checked]="nenhumaOutra()"
+          (change)="alternarNenhumaOutra(checado($event))"
+        />
+        Nenhuma das outras está correta
+      </label>
+      <button type="button" class="confirmar" [disabled]="!podeConfirmar()" (click)="onConfirmar()">
+        Confirmar
       </button>
-    </li>
-  }
-</ul>
+    </div>
+  </fieldset>
+} @else {
+  <ng-container [ngTemplateOutlet]="lista" />
 
-@if (!decidida()) {
-  <button
-    type="button"
-    class="nenhuma surgir"
-    [style.--ordem]="round().respostas.length + 1"
-    (click)="onEscolher(null)"
-  >
-    Nenhuma das respostas está correta
-  </button>
+  @if (!decidida()) {
+    <button
+      type="button"
+      class="nenhuma surgir"
+      [style.--ordem]="round().respostas.length + 1"
+      (click)="onEscolher(null)"
+    >
+      Nenhuma das respostas está correta
+    </button>
+  }
 }
+
+<ng-template #lista>
+  <ul class="grid" role="list">
+    @for (resposta of round().respostas; track resposta.rotuloCego) {
+      @let escolhida = round().escolhaRotulo === resposta.rotuloCego;
+      <li
+        class="answer surgir"
+        [attr.data-rotulo]="resposta.rotuloCego"
+        [style.--ordem]="$index + 1"
+        [class.answer--chosen]="escolhida"
+        [class.answer--marcada]="etapa() === 'marcacao' && marcada(resposta.rotuloCego)"
+        [class.answer--dimmed]="etapa() === 'concluida' && !escolhida"
+      >
+        <div class="answer__head">
+          <span class="answer__label">Resposta {{ resposta.rotuloCego }}</span>
+          @if (escolhida) {
+            <span class="answer__chip">Escolhida</span>
+          } @else if (
+            etapa() === 'concluida' && round().tambemCorretas?.includes(resposta.rotuloCego)
+          ) {
+            <span class="answer__chip answer__chip--tambem">Também correta</span>
+          }
+        </div>
+
+        <div class="answer__text md" [innerHTML]="resposta.texto | markdown"></div>
+
+        @switch (etapa()) {
+          @case ('escolha') {
+            <button type="button" class="answer__btn" (click)="onEscolher(resposta.rotuloCego)">
+              Escolher esta
+            </button>
+          }
+          @case ('marcacao') {
+            @if (!escolhida) {
+              <label
+                class="answer__marca"
+                [for]="'tambem-' + round().id + '-' + resposta.rotuloCego"
+              >
+                <input
+                  type="checkbox"
+                  class="caixa"
+                  [id]="'tambem-' + round().id + '-' + resposta.rotuloCego"
+                  [checked]="marcada(resposta.rotuloCego)"
+                  (change)="alternarMarcada(resposta.rotuloCego, checado($event))"
+                />
+                Resposta {{ resposta.rotuloCego }} também está correta
+              </label>
+            }
+          }
+        }
+      </li>
+    }
+  </ul>
+</ng-template>

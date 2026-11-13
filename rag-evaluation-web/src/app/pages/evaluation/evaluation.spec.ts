@@ -116,6 +116,7 @@ describe('Evaluation', () => {
     for (let i = 0; i < 2; i++) {
       const round = (await store.askQuestion(docId, `P${i}`))!;
       await store.chooseAnswer(docId, round.id, 'A');
+      await store.confirmarTambemCorretas(docId, round.id, []);
     }
     const fixture = TestBed.createComponent(Evaluation);
     fixture.componentRef.setInput('docId', docId);
@@ -129,7 +130,7 @@ describe('Evaluation', () => {
     expect(compiled.querySelector('.composer')).toBeNull();
   });
 
-  it('clears the screen and moves to the next question after a choice', async () => {
+  it('keeps the answers after a choice and asks which others are also correct', async () => {
     // Arrange
     await store.carregarCatalogo();
     await store.askQuestion(docId, 'Primeira pergunta');
@@ -143,9 +144,112 @@ describe('Evaluation', () => {
     await estabilizar(fixture);
 
     // Assert
+    expect(api.ultimoRotulo).toBe('A');
+    expect(compiled.querySelectorAll('.answer')).toHaveLength(4);
+    expect(compiled.querySelector('.answer--chosen .answer__label')?.textContent).toBe(
+      'Resposta A',
+    );
+    expect(compiled.querySelector('.answer__btn')).toBeNull();
+    expect(compiled.querySelector('legend')?.textContent).toContain(
+      'Alguma das outras respostas também está correta?',
+    );
+    expect(compiled.querySelectorAll('.answer__marca input[type=checkbox]')).toHaveLength(3);
+    expect(compiled.querySelector('.composer')).toBeNull();
+    expect(compiled.querySelector('.etapas__contagem')?.textContent).toContain('0 de 10');
+  });
+
+  it('moves to the next question only after confirming the marking', async () => {
+    // Arrange
+    await store.carregarCatalogo();
+    await store.askQuestion(docId, 'Primeira pergunta');
+    const fixture = TestBed.createComponent(Evaluation);
+    fixture.componentRef.setInput('docId', docId);
+    await estabilizar(fixture);
+    const compiled = fixture.nativeElement as HTMLElement;
+    compiled.querySelector<HTMLButtonElement>('.answer__btn')!.click();
+    await estabilizar(fixture);
+
+    // Act
+    compiled.querySelectorAll<HTMLInputElement>('.answer__marca input')[1].click();
+    await estabilizar(fixture);
+    compiled.querySelector<HTMLButtonElement>('.confirmar')!.click();
+    await estabilizar(fixture);
+
+    // Assert
+    expect(api.ultimaMarcacao?.rotulos).toEqual(['C']);
     expect(compiled.querySelector('.answer')).toBeNull();
     expect(compiled.querySelector('.composer')).not.toBeNull();
     expect(compiled.querySelector('.etapas__contagem')?.textContent).toContain('1 de 10');
+  });
+
+  it('resumes on the marking step after a reload between the two steps', async () => {
+    // Arrange: a escolha foi aceita pelo servidor, e a página recarregou antes da marcação.
+    await store.carregarCatalogo();
+    const round = (await store.askQuestion(docId, 'Primeira pergunta'))!;
+    await store.chooseAnswer(docId, round.id, 'C');
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [Evaluation],
+      providers: [provideRouter([]), { provide: ApiRag, useValue: api }],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(Evaluation);
+    fixture.componentRef.setInput('docId', docId);
+
+    // Act
+    await estabilizar(fixture);
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Assert
+    expect(compiled.querySelector('.answer--chosen .answer__label')?.textContent).toBe(
+      'Resposta C',
+    );
+    expect(compiled.querySelector('legend')).not.toBeNull();
+    expect(compiled.querySelector('.composer')).toBeNull();
+  });
+
+  it('goes straight to the next question when none is correct, with no second step', async () => {
+    // Arrange
+    await store.carregarCatalogo();
+    await store.askQuestion(docId, 'Primeira pergunta');
+    const fixture = TestBed.createComponent(Evaluation);
+    fixture.componentRef.setInput('docId', docId);
+    await estabilizar(fixture);
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Act
+    compiled.querySelector<HTMLButtonElement>('.nenhuma')!.click();
+    await estabilizar(fixture);
+
+    // Assert
+    expect(api.ultimoRotulo).toBeNull();
+    expect(api.ultimaMarcacao).toBeNull();
+    expect(compiled.querySelector('legend')).toBeNull();
+    expect(compiled.querySelector('.composer')).not.toBeNull();
+    expect(compiled.querySelector('.etapas__contagem')?.textContent).toContain('1 de 10');
+  });
+
+  it('shows the marking step instead of the completion banner on the last question', async () => {
+    // Arrange
+    api.maxPerguntas = 1;
+    await store.carregarCatalogo();
+    const round = (await store.askQuestion(docId, 'Única'))!;
+    await store.chooseAnswer(docId, round.id, 'B');
+    const fixture = TestBed.createComponent(Evaluation);
+    fixture.componentRef.setInput('docId', docId);
+    await estabilizar(fixture);
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('.done')).toBeNull();
+    expect(compiled.querySelector('legend')).not.toBeNull();
+
+    // Act
+    compiled.querySelector<HTMLInputElement>('.nenhuma-outra input')!.click();
+    await estabilizar(fixture);
+    compiled.querySelector<HTMLButtonElement>('.confirmar')!.click();
+    await estabilizar(fixture);
+
+    // Assert
+    expect(api.ultimaMarcacao?.rotulos).toEqual([]);
+    expect(compiled.querySelector('.done')?.textContent).toContain('concluído');
   });
 
   it('shows progress without letting the evaluator go back', async () => {
@@ -153,6 +257,7 @@ describe('Evaluation', () => {
     await store.carregarCatalogo();
     const round = (await store.askQuestion(docId, 'Primeira pergunta'))!;
     await store.chooseAnswer(docId, round.id, 'B');
+    await store.confirmarTambemCorretas(docId, round.id, ['D']);
     const fixture = TestBed.createComponent(Evaluation);
     fixture.componentRef.setInput('docId', docId);
 

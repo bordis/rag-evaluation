@@ -61,10 +61,83 @@ describe('EvaluationStore', () => {
     // Act
     await store.chooseAnswer(docId, round.id, alvo);
 
-    // Assert
+    // Assert: decidida conta no limite, mas a rodada só fica completa com a marcação.
     expect(store.rounds(docId)[0].escolhaRotulo).toBe(alvo);
     expect(store.answeredCount(docId)).toBe(1);
+    expect(store.hasPendingRound(docId)).toBe(true);
+    expect(await store.askQuestion(docId, 'Outra?')).toBeUndefined();
+  });
+
+  it('confirmarTambemCorretas completes the round and frees the next question', async () => {
+    // Arrange
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+    await store.chooseAnswer(docId, round.id, 'B');
+
+    // Act: a escolhida e repetições não vão no corpo.
+    await store.confirmarTambemCorretas(docId, round.id, ['D', 'B', 'A', 'D']);
+
+    // Assert
+    expect(api.ultimaMarcacao?.roundId).toBe(round.id);
+    expect(api.ultimaMarcacao?.rotulos).toEqual(['D', 'A']);
+    expect(store.rounds(docId)[0].tambemCorretas).toEqual(['D', 'A']);
+    expect(store.rounds(docId)[0].marcadoEm).toBeDefined();
     expect(store.hasPendingRound(docId)).toBe(false);
+    expect(await store.askQuestion(docId, 'Próxima?')).toBeDefined();
+  });
+
+  it('sends an empty list when no other answer is correct', async () => {
+    // Arrange
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+    await store.chooseAnswer(docId, round.id, 'A');
+
+    // Act
+    await store.confirmarTambemCorretas(docId, round.id, []);
+
+    // Assert
+    expect(api.ultimaMarcacao?.rotulos).toEqual([]);
+    expect(store.rounds(docId)[0].tambemCorretas).toEqual([]);
+    expect(store.hasPendingRound(docId)).toBe(false);
+  });
+
+  it('does not mark a round that is undecided, "none" or already marked', async () => {
+    // Arrange
+    const pendente = (await store.askQuestion(docId, 'Pergunta?'))!;
+
+    // Act / Assert
+    await store.confirmarTambemCorretas(docId, pendente.id, ['A']);
+    expect(api.ultimaMarcacao).toBeNull();
+
+    await store.chooseAnswer(docId, pendente.id, null);
+    await store.confirmarTambemCorretas(docId, pendente.id, ['A']);
+    expect(api.ultimaMarcacao).toBeNull();
+  });
+
+  it('surfaces a marking failure in erro() and keeps the round waiting', async () => {
+    // Arrange
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+    await store.chooseAnswer(docId, round.id, 'A');
+    api.falha = new Error('Esta rodada já foi marcada.');
+
+    // Act
+    await store.confirmarTambemCorretas(docId, round.id, ['B']);
+
+    // Assert
+    expect(store.erro()).toBe('Esta rodada já foi marcada.');
+    expect(store.hasPendingRound(docId)).toBe(true);
+  });
+
+  it('sends the marking time apart from the round time', async () => {
+    // Arrange
+    await store.abrirDocumento(docId);
+    const round = (await store.askQuestion(docId, 'Pergunta?'))!;
+    await store.chooseAnswer(docId, round.id, 'C');
+
+    // Act
+    await store.confirmarTambemCorretas(docId, round.id, ['A']);
+
+    // Assert
+    expect(api.ultimaMarcacao?.tempos?.totalMs).toBeGreaterThanOrEqual(0);
+    expect(api.ultimaMarcacao?.tempos?.ocultoMs).toBe(0);
   });
 
   it('marks the document complete once the server reports MAX_PERGUNTAS answers', async () => {
@@ -75,6 +148,7 @@ describe('EvaluationStore', () => {
     for (let i = 0; i < 3; i++) {
       const round = (await store.askQuestion(docId, `Pergunta ${i}?`))!;
       await store.chooseAnswer(docId, round.id, 'A');
+      await store.confirmarTambemCorretas(docId, round.id, []);
     }
 
     // Assert

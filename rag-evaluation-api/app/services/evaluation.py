@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlmodel import Session, select
 
 from app.core.config import get_settings
@@ -80,12 +80,22 @@ def contar_respondidas(sessao: Session, session_id: uuid.UUID, document_id: uuid
 def rodada_pendente(
     sessao: Session, session_id: uuid.UUID, document_id: uuid.UUID
 ) -> QuestionRound | None:
+    """A rodada que ainda nao esta completa: sem escolha, ou com vencedora e sem a marcacao.
+
+    "Nenhuma esta correta" completa a rodada na escolha: nao ha outras a marcar.
+    """
     return sessao.exec(
         select(QuestionRound)
         .where(
             QuestionRound.session_id == session_id,
             QuestionRound.document_id == document_id,
-            QuestionRound.escolhido_em.is_(None),  # type: ignore[union-attr]
+            or_(
+                QuestionRound.escolhido_em.is_(None),  # type: ignore[union-attr]
+                and_(
+                    QuestionRound.nenhuma_correta.is_(False),  # type: ignore[attr-defined]
+                    QuestionRound.marcado_em.is_(None),  # type: ignore[union-attr]
+                ),
+            ),
         )
         .order_by(QuestionRound.criado_em)  # type: ignore[arg-type]
     ).first()
@@ -303,6 +313,32 @@ def registrar_escolha(
     rodada.respostas_vistas = respostas_vistas
     rodada.recarregamentos = recarregamentos
     rodada.largura_tela = largura_tela
+    sessao.add(rodada)
+    sessao.commit()
+    sessao.refresh(rodada)
+
+
+def registrar_marcacao(
+    sessao: Session,
+    rodada: QuestionRound,
+    rotulos: Sequence[str],
+    *,
+    tempo_marcacao_ms: int | None = None,
+    tempo_marcacao_oculto_ms: int | None = None,
+) -> None:
+    """Grava True/False nas respostas nao escolhidas; a escolhida continua nula (nao medida).
+
+    Lista vazia: o avaliador confirmou que nenhuma das outras esta correta.
+    """
+    marcadas = set(rotulos)
+    for resposta in respostas_da_rodada(sessao, rodada.id):
+        if resposta.id == rodada.escolha_answer_id:
+            continue
+        resposta.tambem_correta = resposta.rotulo_cego in marcadas
+        sessao.add(resposta)
+    rodada.marcado_em = datetime.now(UTC)
+    rodada.tempo_marcacao_ms = tempo_marcacao_ms
+    rodada.tempo_marcacao_oculto_ms = tempo_marcacao_oculto_ms
     sessao.add(rodada)
     sessao.commit()
     sessao.refresh(rodada)

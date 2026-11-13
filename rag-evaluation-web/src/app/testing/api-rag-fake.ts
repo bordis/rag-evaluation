@@ -4,6 +4,7 @@ import type {
   QuestionRound,
   RagDocument,
   RotuloCego,
+  TemposDaMarcacao,
   TemposDaRodada,
 } from '../models/evaluation-model';
 import type { ProgressoSessao } from '../services/api-rag';
@@ -140,6 +141,38 @@ export class ApiRagFake {
         rodada.id === roundId ? decidida : rodada,
       );
       return decidida;
+    }
+    throw new Error('Rodada não encontrada.');
+  }
+
+  /** Corpo do último `also-correct`, como seria enviado. */
+  ultimaMarcacao: { roundId: string; rotulos: RotuloCego[]; tempos?: TemposDaMarcacao } | null =
+    null;
+
+  async marcarTambemCorretas(
+    roundId: string,
+    rotulos: RotuloCego[],
+    tempos?: TemposDaMarcacao,
+  ): Promise<QuestionRound> {
+    this.checar();
+    this.ultimaMarcacao = { roundId, rotulos, tempos };
+    for (const [slug, rodadas] of Object.entries(this.rodadasPorSlug)) {
+      const alvo = rodadas.find((rodada) => rodada.id === roundId);
+      if (!alvo) {
+        continue;
+      }
+      if (!alvo.escolhidoEm || alvo.nenhumaCorreta || alvo.marcadoEm) {
+        throw new Error('Esta rodada não aceita marcação.');
+      }
+      const marcada: QuestionRound = {
+        ...alvo,
+        tambemCorretas: [...rotulos],
+        marcadoEm: new Date().toISOString(),
+      };
+      this.rodadasPorSlug[slug] = rodadas.map((rodada) =>
+        rodada.id === roundId ? marcada : rodada,
+      );
+      return marcada;
     }
     throw new Error('Rodada não encontrada.');
   }

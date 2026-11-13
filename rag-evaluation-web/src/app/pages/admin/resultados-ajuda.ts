@@ -40,6 +40,19 @@ export const AJUDA = {
     fontes:
       'Chiang et al. (2024), p. 4–5 (taxa de vitória e faixas de posição); Zheng et al. (2023), p. 7–8; Kiritchenko e Mohammad (2017), p. 4, citando Louviere et al. (2015), sobre a contagem.',
   },
+  correcao: {
+    oQueE:
+      'Depois de escolher a melhor, o avaliador marca quais das outras três também estão corretas. Aqui cada pipeline recebe a proporção de respostas suas consideradas corretas nas rodadas completas: a vencedora conta como correta, as outras valem o que a marcação disse e uma rodada "nenhuma" conta como quatro incorretas.',
+    comoLer: [
+      'Mede outra coisa que a taxa de vitória: um pipeline pode quase nunca vencer e ainda assim acertar com frequência, quando as respostas são todas boas e a escolha fica entre corretas.',
+      'Taxas altas e parecidas nos quatro indicam que a diferença entre eles está na qualidade relativa, e não em acertar ou errar.',
+      'Use o intervalo por bootstrap de avaliadores: as quatro respostas de uma rodada vêm da mesma pessoa e da mesma pergunta e não são independentes, o que deixa o intervalo de Wilson estreito demais.',
+    ],
+    cuidado:
+      'É uma medida secundária e não substitui os testes sobre a vencedora. Rodadas com vencedora ainda sem a marcação ficam fora da conta, inclusive a vencedora, para não inflar a taxa; a quantidade aparece abaixo da tabela. "Correta" é o julgamento do avaliador, não um gabarito.',
+    fontes:
+      'Chiang et al. (2024), p. 3 (opções além da vencedora, como "both are bad"); van der Lee et al. (2021), p. 14–15 (dependência entre observações e efeitos mistos); Card et al. (2020), p. 8–9 (ignorar a variação entre avaliadores superestima a certeza).',
+  },
   efeitos: {
     oQueE:
       'Testa as três hipóteses como perguntas de sim ou não sobre a resposta vencedora. Ingestão: veio de pipeline com Docling (2 ou 4)? Recuperação: veio de recuperação avançada (3 ou 4)? Interação: veio da diagonal 1 e 4, e não de 2 e 3?',
@@ -127,6 +140,19 @@ export const AJUDA = {
     fontes:
       'Zheng et al. (2023), p. 4 e 6; van der Lee et al. (2021), p. 13 (aleatorizar a ordem costuma bastar); Es et al. (2024), p. 2.',
   },
+  marcacaoPosicao: {
+    oQueE:
+      'Entre as respostas não escolhidas das rodadas marcadas, com que frequência cada posição exibida foi marcada como também correta. É o par do viés de posição da escolha, agora no segundo passo.',
+    comoLer: [
+      'Sem viés, as quatro posições ficam perto da média geral (a linha de referência).',
+      'O teste é um qui-quadrado de homogeneidade (tabela 2×4, marcada ou não por posição, 3 graus de liberdade). p menor que 0,05 indica que a marcação depende da posição, por exemplo marcar mais as primeiras respostas da tela.',
+      'Cada posição tem um total diferente porque a posição da escolhida sai da conta em cada rodada.',
+    ],
+    cuidado:
+      'Como os rótulos são sorteados, um viés aqui aumenta o ruído da taxa de correção, mas não favorece um pipeline se o sorteio estiver equilibrado. O viés de posição medido na literatura é sobre a escolha, e em juízes LLM; não há valor esperado para a marcação de pessoas.',
+    fontes:
+      'Zheng et al. (2023), p. 4 e 6 (viés de posição); van der Lee et al. (2021), p. 13 (aleatorizar a ordem e efeitos de ordem).',
+  },
   sorteio: {
     oQueE:
       'Quantas vezes cada pipeline apareceu em cada posição. Confere se o sorteio simples ficou equilibrado.',
@@ -145,6 +171,7 @@ export const AJUDA = {
       'Sinal mais forte de fadiga: tempo caindo e posição 1 subindo, ao mesmo tempo. A escolha passa a seguir a tela, e não o conteúdo.',
       'A escolha de recuperação avançada convergindo para 50% ao final sugere escolhas cada vez mais ao acaso.',
       '"ms por mil caracteres" corrige o tempo pelo tamanho das respostas, que confunde a leitura.',
+      '"Marcação (mediana)" é o tempo do segundo passo, sem a aba oculta, medido à parte: não entra no tempo de leitura e decisão. Caindo muito ao longo do ciclo, sugere marcação no automático.',
     ],
     cuidado:
       'Nas ordens altas há menos rodadas, porque nem todos chegam ao fim, e quem chega não é uma amostra aleatória. O teste de início contra fim não considera o avaliador; o modelo de fadiga está no script em R.',
@@ -200,6 +227,19 @@ export const AJUDA = {
       'Não exclua avaliadores olhando o resultado. Qualquer critério de exclusão deve estar definido antes da coleta e ser relatado.',
     fontes:
       'Chiang et al. (2024), p. 5 e 8 (detecção de usuários anômalos); van der Lee et al. (2021), p. 15 (pré-registro de critérios de exclusão).',
+  },
+  marcacaoAvaliador: {
+    oQueE:
+      'Quanto cada avaliador marca no segundo passo: em quantas rodadas marcou todas as outras respostas, em quantas não marcou nenhuma e quantas outras marcou em média. A numeração é a mesma da tabela "Por avaliador".',
+    comoLer: [
+      'Marcar sempre todas, ou nunca nenhuma, pode ser resposta no automático (satisficing): o segundo passo vira um clique para seguir adiante.',
+      'Compare com o tempo de marcação na tabela por ordem da rodada e com a taxa de "nenhuma" da pessoa: marcação uniforme e rápida é o caso mais preocupante.',
+      'Um padrão uniforme também pode ser legítimo, como respostas de fato todas certas em um documento fácil. Leia as rodadas da pessoa antes de concluir.',
+    ],
+    cuidado:
+      'É um convite à revisão, não um critério de exclusão. Qualquer exclusão precisa estar definida antes da coleta e ser relatada.',
+    fontes:
+      'van der Lee et al. (2021), p. 13 (satisficing) e p. 15 (critérios de exclusão definidos antes da coleta); Chiang et al. (2024), p. 5 e 8 (detecção de usuários anômalos).',
   },
   confiabilidade: {
     oQueE:

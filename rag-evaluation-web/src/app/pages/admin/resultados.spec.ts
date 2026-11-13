@@ -45,6 +45,9 @@ const ESTUDO_VAZIO: Estatisticas = {
   por_ordem: [],
   metades: null,
   vies_tamanho: { ...TAXA_VAZIA, acaso: 0.25, p_valor: null, por_pipeline: [] },
+  taxa_correcao: { rodadas_completas: 0, decididas_sem_marcacao: 0, por_pipeline: [] },
+  marcacao_por_posicao: { respostas: 0, por_posicao: [], teste: null },
+  marcacao_por_avaliador: [],
   por_avaliador: [],
   confiabilidade: null,
   custo: { por_pipeline: [], por_etapa: [], ingestao: [] },
@@ -152,6 +155,92 @@ describe('AdminResultados', () => {
     expect(botao.getAttribute('aria-expanded')).toBe('true');
     expect(painel.hidden).toBe(false);
     expect(painel.textContent).toContain('Chiang et al.');
+  });
+
+  it('mostra a taxa de correção por pipeline na aba de preferência', async () => {
+    const { elemento } = await montar(
+      {
+        ...ESTUDO_VAZIO,
+        taxa_correcao: {
+          rodadas_completas: 12,
+          decididas_sem_marcacao: 2,
+          por_pipeline: [
+            {
+              codigo: 'pipeline-4',
+              sucessos: 9,
+              total: 12,
+              taxa: 0.75,
+              ic95: [0.47, 0.91],
+              ic95_bootstrap: [0.5, 0.95],
+            },
+          ],
+        },
+      },
+      'preferencia',
+    );
+
+    const cartao = Array.from(elemento.querySelectorAll('app-analise-cartao')).find((item) =>
+      item.textContent!.includes('Taxa de correção'),
+    )!;
+    expect(cartao.textContent).toContain('P4 · Docling, avançada');
+    expect(cartao.textContent).toContain('9 / 12');
+    expect(cartao.textContent).toContain('75%');
+    expect(cartao.textContent).toContain('2 rodada(s) com vencedora ainda sem a');
+  });
+
+  it('mostra marcação por posição e por avaliador na aba de validade', async () => {
+    const { elemento } = await montar(
+      {
+        ...ESTUDO_VAZIO,
+        marcacao_por_posicao: {
+          respostas: 30,
+          por_posicao: [1, 2, 3, 4].map((posicao) => ({
+            posicao,
+            sucessos: 3,
+            total: 7,
+            taxa: 3 / 7,
+            ic95: [0.15, 0.75] as [number, number],
+          })),
+          teste: { qui2: 12.3, gl: 3, p_valor: 0.006 },
+        },
+        marcacao_por_avaliador: [
+          {
+            numero: 1,
+            avaliador: 'sessao-1',
+            rodadas_marcadas: 8,
+            todas_marcadas: 8,
+            nenhuma_marcada: 0,
+            taxa_todas_marcadas: 1,
+            taxa_nenhuma_marcada: 0,
+            outras_marcadas_media: 3,
+          },
+        ],
+      },
+      'validade',
+    );
+
+    expect(elemento.textContent).toContain('Qui-quadrado de homogeneidade');
+    expect(elemento.textContent).toContain('3 graus de');
+    const tabela = Array.from(elemento.querySelectorAll('app-analise-cartao')).find((item) =>
+      item.textContent!.includes('Marcação por avaliador'),
+    )!;
+    expect(tabela.textContent).toContain('Avaliador 1');
+    expect(tabela.textContent).toContain('8 (100%)');
+  });
+
+  it('alerta no panorama quando a marcação depende da posição', async () => {
+    const { elemento } = await montar({
+      ...ESTUDO_VAZIO,
+      marcacao_por_posicao: {
+        respostas: 30,
+        por_posicao: [],
+        teste: { qui2: 12.3, gl: 3, p_valor: 0.006 },
+      },
+    });
+
+    expect(elemento.querySelector('.alertas')?.textContent).toContain(
+      'A marcação das outras respostas depende da posição',
+    );
   });
 
   it('toda ajuda explica como ler e cita a fonte', () => {

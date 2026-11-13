@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AceiteDoTermo(BaseModel):
@@ -43,6 +43,28 @@ class RodadaDetalhe(BaseModel):
     nenhuma_correta: bool
     criado_em: datetime | None
     escolhido_em: datetime | None
+    # Rotulos das outras respostas marcadas como corretas, em ordem alfabetica. None: ainda nao
+    # medido; []: o avaliador confirmou que nenhuma das outras esta correta.
+    tambem_corretas: list[str] | None
+    marcado_em: datetime | None
+
+
+class MarcacaoEntrada(BaseModel):
+    """Segundo passo: quais das outras tres tambem estao corretas. Lista vazia: nenhuma delas.
+
+    Os tempos ficam fora de `tempo_total_ms`, que mede so a escolha.
+    """
+
+    rotulos: list[Literal["A", "B", "C", "D"]] = Field(max_length=3)
+    tempo_marcacao_ms: int | None = Field(default=None, ge=0)
+    tempo_marcacao_oculto_ms: int | None = Field(default=None, ge=0)
+
+    @field_validator("rotulos")
+    @classmethod
+    def _sem_repeticao(cls, rotulos: list[str]) -> list[str]:
+        if len(set(rotulos)) != len(rotulos):
+            raise ValueError("Rótulo repetido na marcação.")
+        return rotulos
 
 
 class EscolhaEntrada(BaseModel):

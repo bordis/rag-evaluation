@@ -1,10 +1,12 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
 
 import {
+  aguardaMarcacao,
   MAX_PERGUNTAS,
   type ProgressoDocumento,
   type QuestionRound,
   type RagDocument,
+  rodadaCompleta,
   type RotuloCego,
 } from '../models/evaluation-model';
 import { ApiRag } from './api-rag';
@@ -76,8 +78,12 @@ export class EvaluationStore {
     return this.answeredCount(slug) >= this._maxPerguntas();
   }
 
+  /**
+   * Há rodada não completa: sem escolha, ou com uma vencedora e sem a marcação das outras. O
+   * servidor recusa nova pergunta nesse caso.
+   */
   hasPendingRound(slug: string): boolean {
-    return this.rounds(slug).some((round) => !round.escolhidoEm);
+    return this.rounds(slug).some((round) => !rodadaCompleta(round));
   }
 
   /**
@@ -192,7 +198,8 @@ export class EvaluationStore {
         const rodadas = await this.api.listarRodadas(sessionId, slug);
         this._roundsByDoc.update((mapa) => ({ ...mapa, [slug]: rodadas }));
         await this.atualizarProgresso();
-        if (!this.isComplete(slug)) {
+        // A última rodada já conta no limite, mas pode estar esperando a marcação.
+        if (!this.isComplete(slug) || this.hasPendingRound(slug)) {
           this.cronometro.retomar(slug);
         }
       });
@@ -235,8 +242,9 @@ export class EvaluationStore {
   }
 
   /**
-   * Registra a escolha (`null` = nenhuma está correta) com o tempo da rodada. O cronômetro zera
-   * só com a confirmação do servidor, e a próxima rodada começa a contar a partir daqui.
+   * Registra a escolha (`null` = nenhuma está correta) com o tempo da rodada. O cronômetro muda
+   * só com a confirmação do servidor: com uma vencedora, começa a fase da marcação das outras;
+   * com "nenhuma", a rodada acabou e a próxima começa a contar a partir daqui.
    */
   async chooseAnswer(slug: string, roundId: string, rotulo: RotuloCego | null): Promise<void> {
     const rodada = this.rounds(slug).find((item) => item.id === roundId);
@@ -246,13 +254,48 @@ export class EvaluationStore {
 
     await this.executar(async () => {
       const decidida = await this.api.escolher(roundId, rotulo, this.cronometro.ler(slug));
-      this.cronometro.reiniciar(slug);
-      this._roundsByDoc.update((mapa) => ({
-        ...mapa,
-        [slug]: (mapa[slug] ?? []).map((item) => (item.id === roundId ? decidida : item)),
-      }));
+      if (aguardaMarcacao(decidida)) {
+        this.cronometro.iniciarMarcacao(slug);
+      } else {
+        this.cronometro.reiniciar(slug);
+      }
+      this.substituirRodada(slug, decidida);
       await this.atualizarProgresso();
     });
+  }
+
+  /**
+   * Segundo passo da rodada: quais das outras respostas também estão corretas (lista vazia =
+   * nenhuma outra). É complemento da escolha, não troca dela. Só a confirmação do servidor
+   * encerra a rodada e reinicia o cronômetro para a próxima.
+   */
+  async confirmarTambemCorretas(
+    slug: string,
+    roundId: string,
+    rotulos: RotuloCego[],
+  ): Promise<void> {
+    const rodada = this.rounds(slug).find((item) => item.id === roundId);
+    if (!rodada || !aguardaMarcacao(rodada)) {
+      return;
+    }
+    const outras = [...new Set(rotulos)].filter((rotulo) => rotulo !== rodada.escolhaRotulo);
+
+    await this.executar(async () => {
+      const marcada = await this.api.marcarTambemCorretas(
+        roundId,
+        outras,
+        this.cronometro.lerMarcacao(slug),
+      );
+      this.cronometro.reiniciar(slug);
+      this.substituirRodada(slug, marcada);
+    });
+  }
+
+  private substituirRodada(slug: string, rodada: QuestionRound): void {
+    this._roundsByDoc.update((mapa) => ({
+      ...mapa,
+      [slug]: (mapa[slug] ?? []).map((item) => (item.id === rodada.id ? rodada : item)),
+    }));
   }
 
   private async atualizarProgresso(): Promise<void> {

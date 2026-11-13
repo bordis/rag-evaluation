@@ -11,6 +11,10 @@ e ficam fora desses testes, reportadas a parte. O IC por bootstrap reamostra ava
 rodadas de um mesmo avaliador nao sao independentes. O modelo misto com efeito aleatorio de
 avaliador e documento esta em `analise/modelo_misto.R`, sobre o CSV exportado.
 
+Medida secundaria: depois de escolher a vencedora, o avaliador marca quais das outras tambem
+estao corretas. Dai sai a taxa de correcao por pipeline (`taxa_de_correcao`), sobre as rodadas
+completas; ela usa as quatro respostas da rodada e por isso nao substitui os testes acima.
+
 Fontes dos complementos: Holm/Bonferroni, tamanho de efeito e efeitos de ordem (van der Lee et al.,
 2021); poder para uma faixa de efeitos e erro Type-M, nunca post hoc (Card et al., 2020); faixas
 de posicao com correcao de multiplicidade (Chiang et al., 2024); confiabilidade split-half
@@ -102,6 +106,17 @@ class Rodada:
     truncadas: tuple[str, ...] = ()
     # Por codigo de pipeline, para ligar a rodada as anotacoes do pesquisador.
     respostas_ids: dict[str, uuid.UUID] = field(default_factory=dict)
+    # Segundo passo: o avaliador marcou as outras corretas (so existe em rodada com vencedora).
+    marcado: bool = False
+    # Codigos das nao escolhidas marcadas como tambem corretas.
+    tambem_corretas: tuple[str, ...] = ()
+    tempo_marcacao_ms: int | None = None
+    tempo_marcacao_oculto_ms: int | None = None
+
+    @property
+    def completa(self) -> bool:
+        """Completa: decidida como "nenhuma" ou com a marcacao das outras feita."""
+        return self.nenhuma or self.marcado
 
 
 def wilson(sucessos: int, total: int, z: float = 1.96) -> tuple[float, float] | None:
@@ -159,11 +174,36 @@ def qui_quadrado_uniforme(contagens: list[int]) -> dict | None:
         return None
     esperado = total / 4
     estatistica = sum((valor - esperado) ** 2 / esperado for valor in contagens)
-    # Forma fechada da cauda da qui-quadrado com 3 graus de liberdade.
+    return {"qui2": estatistica, "gl": 3, "p_valor": _cauda_qui2_3gl(estatistica)}
+
+
+def _cauda_qui2_3gl(estatistica: float) -> float:
+    """Forma fechada da cauda da qui-quadrado com 3 graus de liberdade."""
     p_valor = math.erfc(math.sqrt(estatistica / 2)) + math.sqrt(
         2 * estatistica / math.pi
     ) * math.exp(-estatistica / 2)
-    return {"qui2": estatistica, "gl": 3, "p_valor": min(1.0, p_valor)}
+    return min(1.0, p_valor)
+
+
+def qui_quadrado_homogeneidade(sucessos: list[int], totais: list[int]) -> dict | None:
+    """A proporcao e a mesma nas 4 categorias? Tabela 2x4, 3 graus de liberdade.
+
+    E o par da `qui_quadrado_uniforme` quando os denominadores diferem entre as categorias.
+    """
+    if len(sucessos) != 4 or len(totais) != 4:
+        return None
+    total = sum(totais)
+    marcados = sum(sucessos)
+    # Tudo sucesso ou tudo fracasso: frequencia esperada zero, o teste nao se aplica.
+    if total == 0 or marcados in (0, total):
+        return None
+    estatistica = 0.0
+    for s, n in zip(sucessos, totais, strict=True):
+        for observado, margem in ((s, marcados), (n - s, total - marcados)):
+            esperado = n * margem / total
+            if esperado:
+                estatistica += (observado - esperado) ** 2 / esperado
+    return {"qui2": estatistica, "gl": 3, "p_valor": _cauda_qui2_3gl(estatistica)}
 
 
 def duas_proporcoes(s1: int, n1: int, s2: int, n2: int) -> float | None:
@@ -338,6 +378,8 @@ def carregar_rodadas(sessao: Session, study_id: uuid.UUID) -> list[Rodada]:
         vencedora = next(
             ((res, pip) for res, pip in respostas if res.id == rodada.escolha_answer_id), None
         )
+        # So rodada com vencedora tem segundo passo; em "nenhuma" o campo fica sempre nulo.
+        marcado = rodada.marcado_em is not None and not rodada.nenhuma_correta
         rodadas.append(
             Rodada(
                 id=rodada.id,
@@ -359,6 +401,12 @@ def carregar_rodadas(sessao: Session, study_id: uuid.UUID) -> list[Rodada]:
                     pip.codigo for res, pip in respostas if res.motivo_parada == "length"
                 ),
                 respostas_ids={pip.codigo: res.id for res, pip in respostas},
+                marcado=marcado,
+                tambem_corretas=tuple(
+                    sorted(pip.codigo for res, pip in respostas if marcado and res.tambem_correta)
+                ),
+                tempo_marcacao_ms=rodada.tempo_marcacao_ms,
+                tempo_marcacao_oculto_ms=rodada.tempo_marcacao_oculto_ms,
                 vencedor=vencedora[1].codigo if vencedora else None,
                 posicao=vencedora[0].posicao_exibida if vencedora else None,
                 docling=vencedora[1].parser is ParserType.DOCLING if vencedora else None,
@@ -379,6 +427,127 @@ def tempo_ativo_ms(rodada: Rodada) -> int | None:
         - (rodada.tempo_oculto_ms or 0)
         - (rodada.tempo_pergunta_ms or 0),
     )
+
+
+def tempo_marcacao_ativo_ms(rodada: Rodada) -> int | None:
+    """Tempo da marcacao das outras, sem a aba oculta. Fica fora de `tempo_ativo_ms`."""
+    if rodada.tempo_marcacao_ms is None:
+        return None
+    return max(0, rodada.tempo_marcacao_ms - (rodada.tempo_marcacao_oculto_ms or 0))
+
+
+def resposta_correta(
+    *, nenhuma: bool, venceu: bool, marcado: bool, tambem_correta: bool | None
+) -> bool | None:
+    """Uma resposta da rodada esta correta? None quando a rodada ainda nao esta completa.
+
+    Rodada "nenhuma": nenhuma das quatro. Rodada marcada: a vencedora sim, as outras o que a
+    marcacao disse. Vencedora sem marcacao: a rodada inteira fica nula, inclusive a vencedora;
+    do contrario so as vencedoras dessas rodadas entrariam e inflariam a taxa.
+    """
+    if nenhuma:
+        return False
+    if not marcado:
+        return None
+    return venceu or bool(tambem_correta)
+
+
+def _correta_na_rodada(rodada: Rodada, codigo: str) -> bool | None:
+    return resposta_correta(
+        nenhuma=rodada.nenhuma,
+        venceu=rodada.vencedor == codigo,
+        marcado=rodada.marcado,
+        tambem_correta=codigo in rodada.tambem_corretas,
+    )
+
+
+def taxa_de_correcao(rodadas: list[Rodada], codigos: Iterable[str]) -> dict:
+    """Medida secundaria: proporcao de respostas corretas de cada pipeline nas rodadas completas.
+
+    Ao contrario da vencedora, aqui as quatro respostas de uma rodada contam, e elas nao sao
+    independentes; por isso o IC por bootstrap reamostra avaliadores, alem do Wilson.
+    "Nenhuma" entra como quatro incorretas; decidida sem marcacao fica fora, contada a parte.
+    """
+    completas = [rodada for rodada in rodadas if rodada.completa]
+
+    def resumo(codigo: str) -> dict:
+        acertos = [
+            (rodada.avaliador, bool(_correta_na_rodada(rodada, codigo)))
+            for rodada in completas
+            if codigo in rodada.posicoes
+        ]
+        return {
+            "codigo": codigo,
+            **_taxa(sum(acerto for _, acerto in acertos), len(acertos)),
+            "ic95_bootstrap": bootstrap_por_grupo(acertos),
+        }
+
+    return {
+        "rodadas_completas": len(completas),
+        "decididas_sem_marcacao": len(rodadas) - len(completas),
+        "por_pipeline": [resumo(codigo) for codigo in codigos],
+    }
+
+
+def marcacao_por_posicao(rodadas: list[Rodada]) -> dict:
+    """Entre as nao escolhidas das rodadas marcadas, a marcada depende da posicao exibida?
+
+    Qui-quadrado de homogeneidade (3 gl), o par do teste do vies de posicao da escolha: aqui o
+    denominador de cada posicao varia, porque a posicao da escolhida sai da conta.
+    """
+    marcadas = [0, 0, 0, 0]
+    totais = [0, 0, 0, 0]
+    for rodada in rodadas:
+        if not rodada.marcado:
+            continue
+        for codigo, posicao in rodada.posicoes.items():
+            if codigo == rodada.vencedor or posicao not in (1, 2, 3, 4):
+                continue
+            totais[posicao - 1] += 1
+            marcadas[posicao - 1] += codigo in rodada.tambem_corretas
+    return {
+        "respostas": sum(totais),
+        "por_posicao": [
+            {"posicao": posicao, **_taxa(marcadas[posicao - 1], totais[posicao - 1])}
+            for posicao in (1, 2, 3, 4)
+        ],
+        "teste": qui_quadrado_homogeneidade(marcadas, totais),
+    }
+
+
+def uniformidade_da_marcacao(rodadas: list[Rodada]) -> list[dict]:
+    """Quem marca sempre todas ou nunca nenhuma pode estar respondendo no automatico.
+
+    Revisar, nao excluir. A numeracao e a mesma de `resumo_avaliadores`.
+    """
+    grupos: dict[uuid.UUID, list[Rodada]] = defaultdict(list)
+    for rodada in rodadas:
+        grupos[rodada.avaliador].append(rodada)
+    ordenados = sorted(grupos.items(), key=lambda item: (-len(item[1]), str(item[0])))
+
+    saida = []
+    for numero, (avaliador, grupo) in enumerate(ordenados, start=1):
+        marcadas = [rodada for rodada in grupo if rodada.marcado]
+        if not marcadas:
+            continue
+        todas = sum(
+            len(rodada.posicoes) > 1 and len(rodada.tambem_corretas) == len(rodada.posicoes) - 1
+            for rodada in marcadas
+        )
+        nenhuma = sum(not rodada.tambem_corretas for rodada in marcadas)
+        saida.append(
+            {
+                "numero": numero,
+                "avaliador": avaliador,
+                "rodadas_marcadas": len(marcadas),
+                "todas_marcadas": todas,
+                "nenhuma_marcada": nenhuma,
+                "taxa_todas_marcadas": todas / len(marcadas),
+                "taxa_nenhuma_marcada": nenhuma / len(marcadas),
+                "outras_marcadas_media": fmean(len(r.tambem_corretas) for r in marcadas),
+            }
+        )
+    return saida
 
 
 def resumo_da_coleta(rodadas: list[Rodada], codigos: Iterable[str], falhas: int) -> dict:
@@ -656,6 +825,7 @@ def analisar_escolhas(rodadas: list[Rodada], codigos: Iterable[str]) -> dict:
 
     def resumo_ordem(ordem: int, grupo: list[Rodada]) -> dict:
         ativos = [t for t in map(tempo_ativo_ms, grupo) if t is not None]
+        marcacao = [t for t in map(tempo_marcacao_ativo_ms, grupo) if t is not None]
         decididas = [item for item in grupo if not item.nenhuma]
         tamanho_medio = fmean(item.tamanho_respostas for item in grupo)
         return {
@@ -663,6 +833,8 @@ def analisar_escolhas(rodadas: list[Rodada], codigos: Iterable[str]) -> dict:
             "rodadas": len(grupo),
             "nenhuma": sum(item.nenhuma for item in grupo),
             "tempo_ativo_mediano_ms": median(ativos) if ativos else None,
+            # Segundo passo, medido a parte: nao esta somado ao tempo ativo da escolha.
+            "tempo_marcacao_ativo_mediano_ms": median(marcacao) if marcacao else None,
             "tempo_ativo_p25_ms": percentil(ativos, 0.25),
             "tempo_ativo_p75_ms": percentil(ativos, 0.75),
             "tamanho_medio_respostas": tamanho_medio,
@@ -1285,4 +1457,7 @@ def analisar_estudo(sessao: Session, study_id: uuid.UUID) -> dict:
         "contexto": resumir_contexto(linhas_contexto(sessao, rodadas), codigos),
         "ragas": analisar_ragas(notas, rodadas, codigos),
         "erros": analisar_erros(rodadas, notas, codigos, documentos, anotacoes),
+        "taxa_correcao": taxa_de_correcao(rodadas, codigos),
+        "marcacao_por_posicao": marcacao_por_posicao(rodadas),
+        "marcacao_por_avaliador": uniformidade_da_marcacao(rodadas),
     }

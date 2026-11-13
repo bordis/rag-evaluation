@@ -9,6 +9,7 @@ import type {
   QuestionRound,
   RagDocument,
   RotuloCego,
+  TemposDaMarcacao,
   TemposDaRodada,
 } from '../models/evaluation-model';
 
@@ -37,6 +38,9 @@ interface RodadaDTO {
   escolha_rotulo: RotuloCego | null;
   nenhuma_correta: boolean;
   escolhido_em: string | null;
+  /** `null` = marcação ainda não feita; `[]` = nenhuma outra está correta. */
+  tambem_corretas?: RotuloCego[] | null;
+  marcado_em?: string | null;
 }
 
 interface ProgressoDTO {
@@ -171,6 +175,25 @@ export class ApiRag {
     return this.paraRodada(rodada);
   }
 
+  /**
+   * Segundo passo da rodada: quais das outras respostas também estão corretas. Lista vazia
+   * registra que nenhuma outra está. O tempo é o da marcação, medido à parte do da escolha.
+   */
+  async marcarTambemCorretas(
+    roundId: string,
+    rotulos: RotuloCego[],
+    tempos?: TemposDaMarcacao,
+  ): Promise<QuestionRound> {
+    const rodada = await this.executar(
+      this.http.post<RodadaDTO>(`${this.base}/rounds/${roundId}/also-correct`, {
+        rotulos,
+        tempo_marcacao_ms: tempos?.totalMs ?? null,
+        tempo_marcacao_oculto_ms: tempos?.ocultoMs ?? null,
+      }),
+    );
+    return this.paraRodada(rodada);
+  }
+
   private paraRodada(rodada: RodadaDTO): QuestionRound {
     return {
       id: rodada.id,
@@ -184,6 +207,8 @@ export class ApiRag {
       escolhaRotulo: rodada.escolha_rotulo ?? undefined,
       nenhumaCorreta: rodada.nenhuma_correta,
       escolhidoEm: rodada.escolhido_em ?? undefined,
+      tambemCorretas: rodada.tambem_corretas ?? undefined,
+      marcadoEm: rodada.marcado_em ?? undefined,
     };
   }
 

@@ -71,6 +71,14 @@ class QuestionRound(SQLModel, table=True):
     escolhido_em: datetime | None = Field(
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
+    # Segundo passo: com vencedora, o avaliador marca quais das outras tambem estao corretas.
+    # Completa = decidida e (`nenhuma_correta` ou `marcado_em`); so a completa libera a proxima.
+    marcado_em: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    # Fora de `tempo_total_ms`: a marcacao nao entra no tempo ativo da escolha.
+    tempo_marcacao_ms: int | None = Field(default=None)
+    tempo_marcacao_oculto_ms: int | None = Field(default=None)
 
 
 class PipelineAnswer(SQLModel, table=True):
@@ -92,6 +100,9 @@ class PipelineAnswer(SQLModel, table=True):
     motivo_parada: str | None = Field(default=None, max_length=32)
     # Foto da configuracao usada: editar o pipeline depois nao reescreve o que ja foi coletado.
     config_snapshot: dict = Field(default_factory=dict, sa_column=Column(JSONB, nullable=False))
+    # Nulo: nao medido (a escolhida, rodada "nenhuma" ou ainda sem marcacao). Preenchido so nas
+    # tres nao escolhidas, quando o avaliador marca as outras corretas.
+    tambem_correta: bool | None = Field(default=None)
 
 
 class RoundFailure(SQLModel, table=True):

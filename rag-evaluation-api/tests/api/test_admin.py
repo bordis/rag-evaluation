@@ -1,5 +1,7 @@
 """Estudos, CRUD dos pipelines e a visao do pesquisador, de ponta a ponta na API."""
 
+import csv
+import io
 import uuid
 from types import SimpleNamespace
 
@@ -73,8 +75,10 @@ def _abrir(cliente, nome: str = "Piloto") -> dict:
     return resposta.json()
 
 
-def _rodada_decidida(cliente, documento, rotulo: str | None = "A") -> tuple[str, dict]:
-    """Cada chamada e um avaliador novo, com login proprio."""
+def _rodada_decidida(
+    cliente, documento, rotulo: str | None = "A", marcar: list[str] | None = None, **tempos
+) -> tuple[str, dict]:
+    """Cada chamada e um avaliador novo, com login proprio. `marcar` faz o segundo passo."""
     entrar_como(f"avaliador-{uuid.uuid4()}")
     sessao_id = cliente.post("/api/sessions", json={"aceite": True, "termo_versao": "v1"}).json()[
         "id"
@@ -84,6 +88,11 @@ def _rodada_decidida(cliente, documento, rotulo: str | None = "A") -> tuple[str,
         json={"pergunta": "O que a lei diz?"},
     ).json()
     cliente.post(f"/api/rounds/{rodada['id']}/choice", json={"rotulo": rotulo})
+    if marcar is not None:
+        marcacao = cliente.post(
+            f"/api/rounds/{rodada['id']}/also-correct", json={"rotulos": marcar, **tempos}
+        )
+        assert marcacao.status_code == 200, marcacao.text
     return sessao_id, rodada
 
 
@@ -280,6 +289,96 @@ def test_estatisticas_e_csv_do_estudo(cliente, documento):
     linhas = csv.text.strip().splitlines()
     assert linhas[0].startswith("rodada,avaliador,documento,ordem,pipeline")
     assert len(linhas) == 1 + 8
+
+
+def test_detalhe_mostra_a_marcacao_das_outras_respostas(cliente, documento):
+    _abrir(cliente)
+    sessao_id, _ = _rodada_decidida(
+        cliente,
+        documento,
+        "A",
+        marcar=["C"],
+        tempo_marcacao_ms=4000,
+        tempo_marcacao_oculto_ms=100,
+    )
+
+    rodada = cliente.get(f"/api/admin/avaliacoes/{sessao_id}/{documento.id}").json()["rodadas"][0]
+
+    assert rodada["marcado_em"] is not None
+    assert rodada["tempo_marcacao_ms"] == 4000
+    assert rodada["tempo_marcacao_oculto_ms"] == 100
+    assert {item["rotulo"]: item["tambem_correta"] for item in rodada["respostas"]} == {
+        "A": None,
+        "B": False,
+        "C": True,
+        "D": False,
+    }
+
+
+def test_detalhe_de_rodada_sem_marcacao_deixa_os_campos_nulos(cliente, documento):
+    _abrir(cliente)
+    sessao_id, _ = _rodada_decidida(cliente, documento, "A")
+
+    rodada = cliente.get(f"/api/admin/avaliacoes/{sessao_id}/{documento.id}").json()["rodadas"][0]
+
+    assert rodada["marcado_em"] is None
+    assert rodada["tempo_marcacao_ms"] is None
+    assert all(item["tambem_correta"] is None for item in rodada["respostas"])
+
+
+def test_csv_traz_a_marcacao_e_a_correcao_no_fim_do_cabecalho(cliente, documento):
+    estudo = _abrir(cliente)
+    _, marcada = _rodada_decidida(cliente, documento, "A", marcar=["B"], tempo_marcacao_ms=3000)
+    _, nenhuma = _rodada_decidida(cliente, documento, None)
+    _, sem_marcacao = _rodada_decidida(cliente, documento, "D")
+
+    texto = cliente.get(f"/api/admin/studies/{estudo['id']}/export.csv").text
+    linhas = list(csv.DictReader(io.StringIO(texto)))
+    cabecalho = texto.splitlines()[0].split(",")
+
+    assert cabecalho[:2] == ["rodada", "avaliador"]
+    assert cabecalho[-6:] == [
+        "pergunta",
+        "tambem_correta",
+        "correta",
+        "marcado_em",
+        "tempo_marcacao_ms",
+        "tempo_marcacao_oculto_ms",
+    ]
+
+    def por_rotulo(rodada: dict) -> dict[str, dict]:
+        return {linha["rotulo"]: linha for linha in linhas if linha["rodada"] == rodada["id"]}
+
+    m = por_rotulo(marcada)
+    assert [m[r]["correta"] for r in "ABCD"] == ["1", "1", "0", "0"]
+    assert [m[r]["tambem_correta"] for r in "ABCD"] == ["", "1", "0", "0"]
+    assert m["A"]["tempo_marcacao_ms"] == "3000"
+    assert m["A"]["marcado_em"]
+    n = por_rotulo(nenhuma)
+    assert [n[r]["correta"] for r in "ABCD"] == ["0", "0", "0", "0"]
+    assert n["A"]["marcado_em"] == ""
+    s = por_rotulo(sem_marcacao)
+    assert [s[r]["correta"] for r in "ABCD"] == ["", "", "", ""]
+    assert [s[r]["tambem_correta"] for r in "ABCD"] == ["", "", "", ""]
+
+
+def test_estatisticas_trazem_a_taxa_de_correcao(cliente, documento):
+    estudo = _abrir(cliente)
+    _rodada_decidida(cliente, documento, "A", marcar=["B", "C", "D"], tempo_marcacao_ms=2000)
+    _rodada_decidida(cliente, documento, None)
+    _rodada_decidida(cliente, documento, "B")
+
+    stats = cliente.get(f"/api/admin/studies/{estudo['id']}/stats").json()
+
+    correcao = stats["taxa_correcao"]
+    assert correcao["rodadas_completas"] == 2
+    assert correcao["decididas_sem_marcacao"] == 1
+    assert [item["total"] for item in correcao["por_pipeline"]] == [2, 2, 2, 2]
+    assert [item["sucessos"] for item in correcao["por_pipeline"]] == [1, 1, 1, 1]
+    assert stats["marcacao_por_posicao"]["respostas"] == 3
+    assert stats["marcacao_por_avaliador"][0]["todas_marcadas"] == 1
+    assert stats["rodadas_decididas"] == 3
+    assert "tempo_marcacao_ativo_mediano_ms" in stats["por_ordem"][0]
 
 
 def test_nao_exclui_documento_com_rodadas(cliente, documento):

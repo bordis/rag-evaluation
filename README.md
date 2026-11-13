@@ -50,14 +50,19 @@ rótulos A/B/C/D de novo, então a posição também não é pista.
 1. **Boas-vindas** (`/`) — explicação e **aceite do termo**, que cria a sessão. Sem estudo aberto, ninguém começa.
 2. **Seleção de documento** (`/documentos`) — só documentos com ingestão concluída nos 4 pipelines.
 3. **Avaliação** (`/avaliacao/:slug`) — pergunta → 4 respostas anônimas → escolha da melhor ou
-   "nenhuma está correta".
+   "nenhuma está correta" → se escolheu uma, na mesma tela, quais das outras três **também estão
+   corretas** (caixas de marcação, ou "Nenhuma das outras está correta") → próxima pergunta.
 
 Até **10 perguntas respondidas por documento** (`MAX_PERGUNTAS`), por estudo; o limite é imposto pelo
-servidor. Só rodada **decidida** conta — perguntar e abandonar não consome a cota. O `sessionId` fica
-no `sessionStorage` do navegador, então recarregar a página não perde o progresso.
+servidor. Só rodada **decidida** (com escolha) conta — perguntar e abandonar não consome a cota. Mas só
+rodada **completa** (decidida e, se houve vencedora, com a marcação das outras) libera a próxima
+pergunta. A marcação complementa a escolha, não a troca: a escolhida fica travada. O `sessionId` fica no
+`sessionStorage` do navegador, então recarregar a página não perde o progresso; um F5 entre a escolha e
+a marcação retoma na marcação.
 
-**Tempo da rodada:** medido no navegador, da abertura do documento ou da escolha anterior até a
-escolha seguinte. A espera pela geração e o tempo com a aba oculta ficam em colunas próprias.
+**Tempo da rodada:** medido no navegador, da abertura do documento ou do fim da rodada anterior até a
+escolha. A espera pela geração e o tempo com a aba oculta ficam em colunas próprias. A marcação das
+outras respostas tem tempo próprio (total e aba oculta), fora do tempo da rodada.
 
 > **TODO:** identificar o avaliador por login. Hoje, fechar a aba cria outra sessão, e as rotas
 > `/admin` estão abertas: qualquer pessoa que digite a URL vê os pipelines.
@@ -282,10 +287,12 @@ O menu superior leva a esta área em todas as telas, e ela **não tem senha nest
   com rodadas não pode ser excluído.
 - **Pipelines:** CRUD com a configuração em JSON. Com estudo aberto, nada muda. O braço de controle
   não liga técnicas avançadas. Cada resposta guarda um snapshot da configuração usada.
-- **Avaliações:** navega nas perguntas de um ciclo e mostra respostas, pipeline, escolha, tempos,
+- **Avaliações:** navega nas perguntas de um ciclo e mostra respostas, pipeline, escolha, as outras
+  marcadas como também corretas, tempos (inclusive o da marcação),
   tokens, custo e os chunks de cada etapa (denso, BM25, fusão, reordenação, contexto final), com
   ordem, scores e conteúdo.
-- **Resultados:** taxa de vitória, H1 a H3, viés de posição, fadiga, custo, RAGAS e exportação em CSV.
+- **Resultados:** taxa de vitória, H1 a H3, taxa de correção, viés de posição (na escolha e na
+  marcação), fadiga, custo, RAGAS e exportação em CSV.
 
 O documento vira `pronto` quando os 4 pipelines concluem. Com falha em algum, fica `erro_parcial`,
 fora da tela de seleção, e o motivo aparece em **Exibir detalhes**. Imagem acima do limiar sem descrição
@@ -301,6 +308,20 @@ documento como efeitos aleatórios, é `analise/modelo_misto.R`, sobre o CSV:
 ```bash
 Rscript rag-evaluation-api/analise/modelo_misto.R estudo.csv
 ```
+
+A marcação das outras respostas dá medidas **secundárias**, que não substituem os testes sobre a
+vencedora:
+
+- **Taxa de correção por pipeline:** proporção de respostas corretas nas rodadas completas, contando as
+  quatro de cada rodada (a vencedora é correta, as outras valem a marcação, "nenhuma" vale quatro
+  incorretas). Como as quatro respostas de uma rodada não são independentes, há IC por bootstrap de
+  avaliadores além do Wilson. Rodadas com vencedora ainda sem marcação ficam fora, contadas à parte.
+- **Marcação por posição:** entre as não escolhidas, a marcada depende da posição exibida?
+  Qui-quadrado de homogeneidade, 3 graus de liberdade.
+- **Uniformidade da marcação por avaliador:** quem marca sempre todas ou sempre nenhuma, para revisar.
+
+O CSV ganha, no fim, `tambem_correta`, `correta`, `marcado_em`, `tempo_marcacao_ms` e
+`tempo_marcacao_oculto_ms`.
 
 ## RAGAS
 
@@ -331,6 +352,7 @@ chamadas por rodada.
 | `POST` | `/api/sessions/{sid}/documents/{slug}/questions` | Pergunta → rodada com as respostas cegas. |
 | `GET` | `/api/sessions/{sid}/documents/{slug}/rounds` | Histórico, para reidratar o chat. |
 | `POST` | `/api/rounds/{id}/choice` | Escolha e tempos; `rotulo: null` = nenhuma está correta. |
+| `POST` | `/api/rounds/{id}/also-correct` | Segundo passo: `{"rotulos": ["B", "D"], "tempo_marcacao_ms": ..., "tempo_marcacao_oculto_ms": ...}`; lista vazia = nenhuma das outras está correta. Só em rodada decidida com vencedora e ainda sem marcação. |
 | `GET` | `/api/admin/studies/{id}/avaliacoes` | Ciclos do estudo. |
 | `GET` | `/api/admin/avaliacoes/{sid}/{documentId}` | Detalhe completo de um ciclo. |
 | `GET` | `/api/admin/studies/{id}/stats` | Análise do estudo. |
@@ -383,7 +405,7 @@ npx prettier --write .           # formatação
 | Front mostra "Não foi possível falar com o servidor" | API fora do ar, `apiBaseUrl` errado no `environment.ts`, ou a origem do front fora de `CORS_ORIGINS`. |
 | Nenhum documento na tela de seleção | Nenhum documento está `pronto`; o front só lista `?status=pronto`. |
 | Pergunta responde **502** | Algum pipeline falhou ou estourou `PIPELINE_TIMEOUT_SECONDS`. A rodada inteira é invalidada de propósito — escolher entre 3 respostas produziria um dado que não agrega com os demais. |
-| Pergunta responde **409** | Há rodada pendente de escolha, o documento não está `pronto`, o limite de `MAX_PERGUNTAS` foi atingido ou o estudo foi encerrado. |
+| Pergunta responde **409** | Há rodada pendente de escolha ou da marcação das outras respostas, o documento não está `pronto`, o limite de `MAX_PERGUNTAS` foi atingido ou o estudo foi encerrado. |
 | Documento em `erro_parcial`: "O VLM não descreveu N imagens" | Veja os logs do docling-serve. Quem chama o modelo de visão é ele, não a API: `CHAT_BASE_URL` precisa ser alcançável de lá, e `DOCLING_IMAGEM_MODELO` precisa aceitar imagens. |
 | Índice ou tamanho de chunk mudou | As collections só são criadas se não existirem: é preciso removê-las e reingerir o acervo. |
 

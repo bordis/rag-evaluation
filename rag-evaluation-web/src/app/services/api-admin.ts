@@ -88,6 +88,8 @@ export interface RespostaDetalhe {
   pipeline_codigo: string;
   pipeline_nome: string;
   escolhida: boolean;
+  /** Marcada pelo avaliador como também correta; `null` na escolhida e antes da marcação. */
+  tambem_correta: boolean | null;
   texto: string;
   config_snapshot: Record<string, unknown>;
   metricas: MetricaDetalhe[];
@@ -110,6 +112,10 @@ export interface RodadaAdmin {
   tempo_total_ms: number | null;
   tempo_geracao_ms: number | null;
   tempo_oculto_ms: number | null;
+  /** Segundo passo: quais das outras também estão corretas. Fora do tempo total da rodada. */
+  marcado_em: string | null;
+  tempo_marcacao_ms: number | null;
+  tempo_marcacao_oculto_ms: number | null;
   respostas: RespostaDetalhe[];
 }
 
@@ -224,6 +230,34 @@ export interface Estatisticas {
     ms_por_mil_caracteres: number | null;
     taxa_posicao_1: number | null;
     taxa_avancado: number | null;
+    /** Mediana do tempo da marcação das outras, sem a aba oculta. */
+    tempo_marcacao_ativo_mediano_ms: number | null;
+  }>;
+  /**
+   * Medida secundária: proporção de respostas corretas de cada pipeline nas rodadas completas
+   * (as quatro respostas contam; "nenhuma" vale quatro incorretas).
+   */
+  taxa_correcao: {
+    rodadas_completas: number;
+    decididas_sem_marcacao: number;
+    por_pipeline: Array<Taxa & { codigo: string; ic95_bootstrap: Intervalo | null }>;
+  };
+  /** Entre as não escolhidas das rodadas marcadas, a marcação depende da posição exibida? */
+  marcacao_por_posicao: {
+    respostas: number;
+    por_posicao: Array<Taxa & { posicao: number }>;
+    teste: TestePosicao | null;
+  };
+  /** Quem marca sempre todas ou nunca nenhuma pode estar respondendo no automático. */
+  marcacao_por_avaliador: Array<{
+    numero: number;
+    avaliador: string;
+    rodadas_marcadas: number;
+    todas_marcadas: number;
+    nenhuma_marcada: number;
+    taxa_todas_marcadas: number;
+    taxa_nenhuma_marcada: number;
+    outras_marcadas_media: number;
   }>;
   metades: {
     tempo_ativo_inicio_ms: number | null;

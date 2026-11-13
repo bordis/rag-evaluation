@@ -406,6 +406,13 @@ button {
   color: var(--color-on-primary);
 }
 
+/* Marcada como também correta no segundo passo: próxima da escolhida, mas sem o peso dela. */
+.adm-selo--tambem {
+  border: 1px solid var(--color-primary);
+  background-color: var(--color-surface-card);
+  color: var(--color-heading);
+}
+
 .adm-cartoes {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));

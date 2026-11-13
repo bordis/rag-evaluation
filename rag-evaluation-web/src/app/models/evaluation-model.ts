@@ -37,7 +37,10 @@ export interface PipelineAnswer {
   texto: string;
 }
 
-/** Uma rodada: pergunta do avaliador + as respostas candidatas + a escolha. */
+/**
+ * Uma rodada: pergunta do avaliador + as respostas candidatas + a escolha + a marcação das outras
+ * respostas que também estão corretas.
+ */
 export interface QuestionRound {
   id: string;
   /** Posição da rodada no ciclo do documento. */
@@ -49,6 +52,28 @@ export interface QuestionRound {
   nenhumaCorreta: boolean;
   /** Preenchido quando a rodada foi decidida, com uma resposta ou com "nenhuma". */
   escolhidoEm?: string;
+  /**
+   * Outras respostas que o avaliador marcou como também corretas. `undefined` = ainda não medido;
+   * `[]` = ele confirmou que nenhuma outra está correta.
+   */
+  tambemCorretas?: RotuloCego[];
+  /** Preenchido quando a marcação foi confirmada. */
+  marcadoEm?: string;
+}
+
+/** Decidida: tem escolha (ou "nenhuma"). É o que conta para o limite de perguntas. */
+export function rodadaDecidida(rodada: QuestionRound): boolean {
+  return !!rodada.escolhidoEm;
+}
+
+/** Decidida com uma vencedora e ainda sem a marcação das outras: é o segundo passo da rodada. */
+export function aguardaMarcacao(rodada: QuestionRound): boolean {
+  return rodadaDecidida(rodada) && !rodada.nenhumaCorreta && !rodada.marcadoEm;
+}
+
+/** Completa: decidida e, se houve vencedora, já com a marcação. Só então vem a próxima pergunta. */
+export function rodadaCompleta(rodada: QuestionRound): boolean {
+  return rodadaDecidida(rodada) && !aguardaMarcacao(rodada);
 }
 
 /** Progresso do avaliador em um documento, conforme contabilizado pelo servidor. */
@@ -73,4 +98,10 @@ export interface TemposDaRodada {
   respostasVistas?: number | null;
   recarregamentos?: number | null;
   larguraTela?: number | null;
+}
+
+/** Tempos da marcação das outras respostas, medidos à parte do tempo da rodada. */
+export interface TemposDaMarcacao {
+  totalMs: number;
+  ocultoMs: number;
 }

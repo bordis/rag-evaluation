@@ -31,7 +31,7 @@ from app.schemas.admin import (
     RespostaDetalhe,
     RodadaAdmin,
 )
-from app.services.analise import analisar_estudo, e_avancado
+from app.services.analise import analisar_estudo, e_avancado, resposta_correta
 from app.services.ragas_rodadas import (
     calcular_em_segundo_plano,
     calcular_notas,
@@ -121,6 +121,7 @@ def _detalhar_resposta(
         pipeline_codigo=pipeline.codigo,
         pipeline_nome=pipeline.nome,
         escolhida=resposta.id == rodada.escolha_answer_id,
+        tambem_correta=resposta.tambem_correta,
         texto=resposta.texto,
         config_snapshot=resposta.config_snapshot,
         metricas=[
@@ -166,6 +167,9 @@ def _detalhar_rodada(sessao: Session, rodada: QuestionRound) -> RodadaAdmin:
         criado_em=rodada.criado_em,
         respondido_em=rodada.respondido_em,
         escolhido_em=rodada.escolhido_em,
+        marcado_em=rodada.marcado_em,
+        tempo_marcacao_ms=rodada.tempo_marcacao_ms,
+        tempo_marcacao_oculto_ms=rodada.tempo_marcacao_oculto_ms,
         respostas=[
             _detalhar_resposta(sessao, resposta, pipeline, rodada)
             for resposta, pipeline in respostas
@@ -230,6 +234,11 @@ def remover_anotacao(sessao: SessionDep, answer_id: uuid.UUID) -> None:
         sessao.commit()
 
 
+def _binario(valor: bool | None) -> int | None:
+    """1/0 como as demais colunas binarias; nulo vira celula vazia (nao medido)."""
+    return None if valor is None else int(valor)
+
+
 @router.get("/studies/{study_id}/export.csv")
 def exportar_csv(sessao: SessionDep, study_id: uuid.UUID) -> Response:
     """Uma linha por rodada x pipeline, no formato que `analise/modelo_misto.R` le."""
@@ -274,9 +283,21 @@ def exportar_csv(sessao: SessionDep, study_id: uuid.UUID) -> Response:
             "motivo_parada",
             "tamanho_resposta",
             "pergunta",
+            # Segundo passo, no fim para nao deslocar as colunas anteriores.
+            "tambem_correta",
+            "correta",
+            "marcado_em",
+            "tempo_marcacao_ms",
+            "tempo_marcacao_oculto_ms",
         ]
     )
     for rodada, resposta, pipeline, slug in linhas:
+        correta = resposta_correta(
+            nenhuma=rodada.nenhuma_correta,
+            venceu=resposta.id == rodada.escolha_answer_id,
+            marcado=rodada.marcado_em is not None,
+            tambem_correta=resposta.tambem_correta,
+        )
         escritor.writerow(
             [
                 rodada.id,
@@ -302,6 +323,11 @@ def exportar_csv(sessao: SessionDep, study_id: uuid.UUID) -> Response:
                 resposta.motivo_parada,
                 len(resposta.texto),
                 rodada.pergunta,
+                _binario(resposta.tambem_correta),
+                _binario(correta),
+                rodada.marcado_em.isoformat() if rodada.marcado_em else None,
+                rodada.tempo_marcacao_ms,
+                rodada.tempo_marcacao_oculto_ms,
             ]
         )
     return Response(

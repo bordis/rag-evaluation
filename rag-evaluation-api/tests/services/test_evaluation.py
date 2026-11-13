@@ -12,6 +12,7 @@ from app.services.evaluation import (
     contar_respondidas,
     criar_rodada,
     registrar_escolha,
+    registrar_marcacao,
     respostas_da_rodada,
     rodada_pendente,
     sortear_rotulos,
@@ -167,7 +168,29 @@ async def test_contagem_so_considera_rodada_decidida(sessao, cenario):
     # Act
     registrar_escolha(sessao, rodada, respostas_da_rodada(sessao, rodada.id)[0])
 
+    # Assert — decidida ja conta, mas so a marcacao das outras completa a rodada
+    assert contar_respondidas(sessao, avaliador.id, documento.id) == 1
+    assert rodada_pendente(sessao, avaliador.id, documento.id) is not None
+    assert rodada.escolhido_em is not None
+
+    # Act
+    registrar_marcacao(sessao, rodada, [])
+
     # Assert
     assert contar_respondidas(sessao, avaliador.id, documento.id) == 1
     assert rodada_pendente(sessao, avaliador.id, documento.id) is None
-    assert rodada.escolhido_em is not None
+
+
+async def test_rodada_nenhuma_completa_sem_marcacao(sessao, cenario):
+    avaliador, documento = cenario
+    rodada = await criar_rodada(
+        sessao,
+        avaliador.id,
+        documento.id,
+        "Pergunta?",
+        dependencias=dependencias_falsas(PipelineFalso()),
+    )
+
+    registrar_escolha(sessao, rodada, None)
+
+    assert rodada_pendente(sessao, avaliador.id, documento.id) is None

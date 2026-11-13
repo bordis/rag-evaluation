@@ -14,6 +14,7 @@ function resposta(
   codigo: string,
   media: number | null,
   escolhida = false,
+  tambemCorreta: boolean | null = null,
 ): RespostaDetalhe {
   return {
     id: `resposta-${rotulo}`,
@@ -22,6 +23,7 @@ function resposta(
     pipeline_codigo: codigo,
     pipeline_nome: codigo,
     escolhida,
+    tambem_correta: tambemCorreta,
     texto: 'Texto',
     config_snapshot: {},
     metricas: [],
@@ -49,6 +51,9 @@ function rodada(ordem: number, extras: Partial<RodadaAdmin>): RodadaAdmin {
     tempo_total_ms: null,
     tempo_geracao_ms: null,
     tempo_oculto_ms: null,
+    marcado_em: null,
+    tempo_marcacao_ms: null,
+    tempo_marcacao_oculto_ms: null,
     respostas: [],
     ...extras,
   };
@@ -63,7 +68,13 @@ const AVALIACAO: AvaliacaoDetalhe = {
   aceito_em: null,
   rodadas: [
     rodada(1, {
-      respostas: [resposta('A', 'pipeline-1', 0.4, true), resposta('B', 'pipeline-3', 0.9)],
+      marcado_em: '2026-11-13T10:00:00Z',
+      tempo_marcacao_ms: 4200,
+      tempo_marcacao_oculto_ms: 300,
+      respostas: [
+        resposta('A', 'pipeline-1', 0.4, true),
+        resposta('B', 'pipeline-3', 0.9, false, true),
+      ],
     }),
     rodada(2, {
       respostas: [resposta('A', 'pipeline-2', 0.7), resposta('B', 'pipeline-4', 0.7, true)],
@@ -104,11 +115,30 @@ describe('AdminAvaliacaoDetalhe', () => {
     const tela = await abrir();
 
     expect(celulas(tela)).toEqual([
-      ['1', 'Pergunta 1', 'pipeline-1 (A)', 'pipeline-3 (B)'],
-      ['2', 'Pergunta 2', 'pipeline-4 (B)', 'Empate: pipeline-2 (A), pipeline-4 (B)'],
-      ['3', 'Pergunta 3', 'Nenhuma está correta', 'Sem notas completas'],
-      ['4', 'Pergunta 4', 'Pendente', 'Sem notas completas'],
+      ['1', 'Pergunta 1', 'pipeline-1 (A)', 'pipeline-3 (B)', 'pipeline-3 (B)'],
+      [
+        '2',
+        'Pergunta 2',
+        'pipeline-4 (B)',
+        'Marcação pendente',
+        'Empate: pipeline-2 (A), pipeline-4 (B)',
+      ],
+      ['3', 'Pergunta 3', 'Nenhuma está correta', '—', 'Sem notas completas'],
+      ['4', 'Pergunta 4', 'Pendente', '—', 'Sem notas completas'],
     ]);
+  });
+
+  it('marca no cartão a resposta também correta e mostra o tempo da marcação', async () => {
+    const tela = await abrir();
+
+    const cartoes = Array.from(tela.querySelectorAll('article.adm-cartao'));
+    expect(cartoes.map((cartao) => cartao.textContent!.includes('Também correta'))).toEqual([
+      false,
+      true,
+    ]);
+    const resumo = tela.querySelector('section.adm-cartao')!.textContent!;
+    expect(resumo).toContain('Marcação das outras respostas: 4.2 s');
+    expect(resumo).toContain('aba oculta 0.3 s');
   });
 
   it('marca no cartão a resposta melhor no RAGAS', async () => {

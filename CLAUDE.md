@@ -11,7 +11,10 @@ live in the repo-root `README.md`.
 
 **Flow:** welcome + consent (creates the session, only while a study is open) → pick one document (the one the
 evaluator knows best) → ChatGPT-style Q&A → for each question, four anonymous answers (A/B/C/D) → choose the best or
-"none is correct". Up to **10 answered questions per document, per study**; evaluators can switch documents freely.
+"none is correct" → if a winner was chosen, a **second step on the same screen**: "Alguma das outras respostas também
+está correta?" (one checkbox per remaining answer plus the exclusive "Nenhuma das outras está correta", then
+"Confirmar" → `POST /rounds/{id}/also-correct`). "None is correct" has no second step.
+Up to **10 answered questions per document, per study**; evaluators can switch documents freely.
 Researcher screens live under `/admin` (studies, documents, pipelines CRUD, round browser, results).
 The results page is split in tabs kept in `?aba=`; every analysis sits in `components/analise-cartao/`, whose "?" text
 (how to read it, caveats, sources) lives in `pages/admin/resultados-ajuda.ts`. New analysis means a new help entry.
@@ -31,9 +34,21 @@ The results page is split in tabs kept in `?aba=`; every analysis sits in `compo
   term again in that study. The guard on `/documentos` doesn't navigate without consent: it calls `pedirAceite()`
   and redirects home, where `Welcome` scrolls to the term, highlights it and focuses the checkbox.
 - **Round timing is measured in the browser** (`services/cronometro-rodada.ts`) and survives F5. Generation wait and
-  hidden-tab time are separate fields, not subtracted.
-- **Each question is a step, one per screen, with no way back** (`components/progresso-etapas/` only shows progress).
-  This was the researcher's decision after trying read-only review; the server doesn't allow a second choice either.
+  hidden-tab time are separate fields, not subtracted. It has **two phases** in the same `sessionStorage` entry
+  (`fase`): the round phase ends at the choice and sends the same fields as always; `iniciarMarcacao` starts the
+  marking phase once the server accepts a winner, and `lerMarcacao` gives its own total and hidden time for
+  `also-correct`. The next round's clock only restarts (`reiniciar`) when the marking is confirmed, or at the
+  choice when it was "none is correct".
+- **Decided ≠ complete.** Decided = `escolhidoEm` set; it is what counts toward the question limit and progress.
+  Complete = decided and (`nenhumaCorreta` or `marcadoEm`); the server refuses a new question (409) while any round is
+  not complete. The helpers live in `models/evaluation-model.ts` (`rodadaDecidida`, `aguardaMarcacao`,
+  `rodadaCompleta`); `hasPendingRound` and the screen's `rodadaPendente` use "complete". The step shown comes from
+  the server's round, never from local state, so an F5 between the steps resumes on the marking. The marking step
+  also takes precedence over the "document finished" banner: the 10th round already counts but may still need it.
+- **Each question is a step, one per screen, with no way back** (`components/progresso-etapas/` only shows progress,
+  counting complete rounds). This was the researcher's decision after trying read-only review; the server doesn't
+  allow a second choice either, and that still holds: the marking is a **complement** of the choice, not a way to
+  change it (the chosen answer stays locked, and the store drops its label from the marked list).
 - **The evaluator can open the document's PDF** in a side panel of the evaluation screen, in the same tab so the
   consultation isn't counted as hidden time. It is deliberately not linked to chunks or citations: chunk text exposes the parser.
 - **Answers are Markdown** (`pipes/markdown-pipe.ts`, always through `[innerHTML]`, whose sanitizer is the XSS filter).
@@ -49,12 +64,16 @@ The results page is split in tabs kept in `?aba=`; every analysis sits in `compo
 - `services/api-rag.ts` — the only place that talks HTTP. Converts snake_case → domain and `HttpErrorResponse` →
   a Portuguese message (`ApiError`).
 - `services/evaluation-store.ts` — `providedIn: 'root'` signal store: cache + orchestration (`iniciarSessao`,
-  `sessaoValida`, `carregarCatalogo`, `abrirDocumento`, `askQuestion`, `chooseAnswer`) plus `carregando`/`gerando`/`erro`.
+  `sessaoValida`, `carregarCatalogo`, `abrirDocumento`, `askQuestion`, `chooseAnswer`, `confirmarTambemCorretas`) plus
+  `carregando`/`gerando`/`erro`.
   It never generates content and never throws: failures land in `erro()`.
 - `services/api-admin.ts` — researcher API. Its types reveal the pipeline: never use them in the evaluator flow.
 - `models/termo.ts` — consent text (draft) and its version, stored with each acceptance.
 - `pages/` — `welcome/`, `document-selection/`, `evaluation/`, and `admin/` (shared `.adm-*` styles in `styles.css`).
 - `components/` — `progress-badge/`, `progresso-etapas/`, `document-card/`, `chat-message/`, `answer-choice/` (reusable, `OnPush`).
+  `answer-choice` renders both steps of a round over the same answer grid: buttons in the choice step; in the marking
+  step a `fieldset`/`legend` (focused on entry), one labelled checkbox per remaining answer, the exclusive "none of
+  the others" and a sticky "Confirmar" bar. The page holds the double-submit lock.
 - `testing/api-rag-fake.ts` — stateful `ApiRag` double shared by the specs (the app is **zoneless**, so specs
   must yield the event loop once before asserting — see `estabilizar()` in `evaluation.spec.ts`).
 - `src/environments/environment.ts` (production) and `environment.development.ts` (`ng serve`, via `fileReplacements`) —

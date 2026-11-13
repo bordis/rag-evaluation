@@ -16,7 +16,12 @@ from app.core.db import SessionDep
 from app.models.document import Document, StatusDocumento
 from app.models.evaluation import EvaluationSession, QuestionRound
 from app.models.study import StatusEstudo, Study
-from app.schemas.evaluation import EscolhaEntrada, RespostaCega, RodadaDetalhe
+from app.schemas.evaluation import (
+    EscolhaEntrada,
+    MarcacaoEntrada,
+    RespostaCega,
+    RodadaDetalhe,
+)
 from app.services.evaluation import (
     ErroDeRodada,
     contar_respondidas,
@@ -24,6 +29,7 @@ from app.services.evaluation import (
     listar_rodadas,
     registrar_escolha,
     registrar_falha,
+    registrar_marcacao,
     respostas_da_rodada,
     rodada_pendente,
 )
@@ -39,6 +45,11 @@ def _montar_rodada(sessao: Session, rodada: QuestionRound) -> RodadaDetalhe:
         (item for item in respostas if item.id == rodada.escolha_answer_id),
         None,
     )
+    tambem_corretas = (
+        sorted(item.rotulo_cego for item in respostas if item.tambem_correta)
+        if rodada.marcado_em is not None
+        else None
+    )
     return RodadaDetalhe(
         id=rodada.id,
         pergunta=rodada.pergunta,
@@ -51,6 +62,8 @@ def _montar_rodada(sessao: Session, rodada: QuestionRound) -> RodadaDetalhe:
         nenhuma_correta=rodada.nenhuma_correta,
         criado_em=rodada.criado_em,
         escolhido_em=rodada.escolhido_em,
+        tambem_corretas=tambem_corretas,
+        marcado_em=rodada.marcado_em,
     )
 
 
@@ -106,7 +119,7 @@ async def fazer_pergunta(
     if rodada_pendente(sessao, session_id, documento.id) is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            detail="Escolha uma resposta da rodada anterior antes de perguntar de novo.",
+            detail="Conclua a rodada anterior antes de perguntar de novo.",
         )
 
     try:
@@ -136,14 +149,20 @@ def historico_de_rodadas(
     ]
 
 
+def _obter_rodada_do_avaliador(
+    sessao: Session, round_id: uuid.UUID, usuario: Usuario
+) -> tuple[QuestionRound, EvaluationSession]:
+    rodada = sessao.get(QuestionRound, round_id)
+    if rodada is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Rodada não encontrada.")
+    return rodada, obter_sessao_avaliador(sessao, rodada.session_id, usuario)
+
+
 @router.post("/rounds/{round_id}/choice")
 def escolher_resposta(
     sessao: SessionDep, usuario: AvaliadorDep, round_id: uuid.UUID, escolha: EscolhaEntrada
 ) -> RodadaDetalhe:
-    rodada = sessao.get(QuestionRound, round_id)
-    if rodada is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Rodada não encontrada.")
-    avaliador = obter_sessao_avaliador(sessao, rodada.session_id, usuario)
+    rodada, avaliador = _obter_rodada_do_avaliador(sessao, round_id, usuario)
     if rodada.escolhido_em is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta rodada já foi decidida.")
     _exigir_estudo_aberto(sessao, avaliador)
@@ -173,5 +192,52 @@ def escolher_resposta(
         respostas_vistas=escolha.respostas_vistas,
         recarregamentos=escolha.recarregamentos,
         largura_tela=escolha.largura_tela,
+    )
+    return _montar_rodada(sessao, rodada)
+
+
+@router.post("/rounds/{round_id}/also-correct")
+def marcar_tambem_corretas(
+    sessao: SessionDep, usuario: AvaliadorDep, round_id: uuid.UUID, marcacao: MarcacaoEntrada
+) -> RodadaDetalhe:
+    """Segundo passo: das outras tres respostas, quais tambem estao corretas.
+
+    Alimenta a taxa de correcao, uma medida secundaria; a vencedora da rodada nao muda.
+    """
+    rodada, avaliador = _obter_rodada_do_avaliador(sessao, round_id, usuario)
+    if rodada.escolhido_em is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail="Escolha a melhor resposta antes de marcar as outras."
+        )
+    if rodada.nenhuma_correta:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Nesta rodada nenhuma resposta foi considerada correta.",
+        )
+    if rodada.marcado_em is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Esta rodada já foi marcada.")
+    _exigir_estudo_aberto(sessao, avaliador)
+
+    respostas = respostas_da_rodada(sessao, rodada.id)
+    existentes = {item.rotulo_cego for item in respostas}
+    escolhida = next(item.rotulo_cego for item in respostas if item.id == rodada.escolha_answer_id)
+    for rotulo in marcacao.rotulos:
+        if rotulo not in existentes:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"A rodada não tem resposta com o rótulo '{rotulo}'.",
+            )
+        if rotulo == escolhida:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="A resposta escolhida não entra na marcação das outras.",
+            )
+
+    registrar_marcacao(
+        sessao,
+        rodada,
+        marcacao.rotulos,
+        tempo_marcacao_ms=marcacao.tempo_marcacao_ms,
+        tempo_marcacao_oculto_ms=marcacao.tempo_marcacao_oculto_ms,
     )
     return _montar_rodada(sessao, rodada)

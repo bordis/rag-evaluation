@@ -68,6 +68,49 @@ describe('CronometroRodada', () => {
     expect(depoisDoF5.ler('doc')?.recarregamentos).toBe(1);
   });
 
+  it('mede a marcação à parte: começa na escolha e separa o tempo oculto', () => {
+    const cronometro = novo();
+    cronometro.retomar('doc');
+    vi.advanceTimersByTime(10_000);
+    expect(cronometro.lerMarcacao('doc')).toBeUndefined();
+    expect(cronometro.ler('doc')?.totalMs).toBe(10_000);
+
+    cronometro.iniciarMarcacao('doc');
+    vi.advanceTimersByTime(2000);
+    cronometro.pausar();
+    vi.advanceTimersByTime(3000);
+    cronometro.retomar('doc');
+    vi.advanceTimersByTime(1000);
+
+    expect(cronometro.lerMarcacao('doc')).toEqual({ totalMs: 6000, ocultoMs: 3000 });
+  });
+
+  it('a marcação sobrevive a um F5', () => {
+    const cronometro = novo();
+    cronometro.retomar('doc');
+    cronometro.iniciarMarcacao('doc');
+    vi.advanceTimersByTime(1500);
+
+    const depoisDoF5 = novo();
+    depoisDoF5.retomar('doc');
+    vi.advanceTimersByTime(500);
+
+    expect(depoisDoF5.lerMarcacao('doc')).toEqual({ totalMs: 2000, ocultoMs: 0 });
+  });
+
+  it('a rodada seguinte só começa a contar quando a marcação termina', () => {
+    const cronometro = novo();
+    cronometro.retomar('doc');
+    cronometro.iniciarMarcacao('doc');
+    vi.advanceTimersByTime(4000);
+
+    cronometro.reiniciar('doc');
+    vi.advanceTimersByTime(1000);
+
+    expect(cronometro.lerMarcacao('doc')).toBeUndefined();
+    expect(cronometro.ler('doc')?.totalMs).toBe(1000);
+  });
+
   it('a rodada seguinte começa com as medidas zeradas', () => {
     const cronometro = novo();
     cronometro.retomar('doc');

@@ -110,6 +110,8 @@ class RespostaDetalhe(BaseModel):
     pipeline_codigo: str
     pipeline_nome: str
     escolhida: bool
+    # Nulo: nao medido (a escolhida, rodada "nenhuma" ou rodada ainda sem marcacao).
+    tambem_correta: bool | None
     texto: str
     config_snapshot: dict
     metricas: list[MetricaDetalhe]
@@ -130,6 +132,9 @@ class RodadaAdmin(BaseModel):
     criado_em: datetime | None
     respondido_em: datetime | None
     escolhido_em: datetime | None
+    marcado_em: datetime | None
+    tempo_marcacao_ms: int | None
+    tempo_marcacao_oculto_ms: int | None
     respostas: list[RespostaDetalhe]
 
 

@@ -73,7 +73,7 @@ export class Welcome {
       numero: '3',
       titulo: 'Escolha a melhor resposta',
       texto:
-        'Para cada pergunta, apresentamos 4 respostas anônimas (A, B, C e D). Escolha a melhor ou indique que nenhuma está correta.',
+        'Para cada pergunta, apresentamos 4 respostas anônimas (A, B, C e D). Escolha a melhor ou indique que nenhuma está correta. Depois de escolher, marque as outras que também estiverem corretas.',
     },
   ];
 

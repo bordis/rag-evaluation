@@ -1,8 +1,13 @@
 import { Injectable } from '@angular/core';
 
-import type { TemposDaRodada } from '../models/evaluation-model';
+import type { TemposDaMarcacao, TemposDaRodada } from '../models/evaluation-model';
 
 interface EstadoCronometro {
+  /**
+   * `rodada` (ausente nos estados antigos): da pergunta até a escolha. `marcacao`: da escolha
+   * aceita até a confirmação de quais outras respostas também estão corretas.
+   */
+  fase?: 'rodada' | 'marcacao';
   inicio: number;
   geracaoMs: number;
   ocultoMs: number;
@@ -18,9 +23,11 @@ interface EstadoCronometro {
 const PREFIXO = 'rag-evaluation.cronometro.';
 
 /**
- * Mede o tempo de cada rodada no navegador. Conta da abertura do documento (primeira pergunta) ou
- * da escolha anterior até a escolha seguinte, e separa o que não é trabalho do avaliador: a espera
- * pela geração e o tempo com a aba oculta ou fora da tela. Fica no `sessionStorage` para um F5 no
+ * Mede o tempo de cada rodada no navegador, em duas fases. A da rodada conta da abertura do
+ * documento (primeira pergunta) ou do fim da rodada anterior até a escolha, e separa o que não é
+ * trabalho do avaliador: a espera pela geração e o tempo com a aba oculta ou fora da tela. A da
+ * marcação começa quando a escolha é aceita e vai até a confirmação de quais outras respostas
+ * também estão corretas, com o seu próprio tempo oculto. Fica no `sessionStorage` para um F5 no
  * meio da rodada não zerar a conta.
  */
 @Injectable({ providedIn: 'root' })
@@ -117,9 +124,40 @@ export class CronometroRodada {
     };
   }
 
-  /** A escolha foi registrada: a próxima rodada conta a partir de agora. */
+  /**
+   * A rodada terminou (marcação confirmada, ou escolha de "nenhuma está correta"): a próxima
+   * rodada conta a partir de agora.
+   */
   reiniciar(slug: string): void {
-    this.gravar(slug, { inicio: Date.now(), geracaoMs: 0, ocultoMs: 0, pausadoEm: null });
+    this.gravar(slug, {
+      fase: 'rodada',
+      inicio: Date.now(),
+      geracaoMs: 0,
+      ocultoMs: 0,
+      pausadoEm: null,
+    });
+  }
+
+  /** A escolha de uma resposta foi aceita: começa a fase da marcação das outras. */
+  iniciarMarcacao(slug: string): void {
+    this.gravar(slug, {
+      fase: 'marcacao',
+      inicio: Date.now(),
+      geracaoMs: 0,
+      ocultoMs: 0,
+      pausadoEm: null,
+    });
+  }
+
+  /** Tempo da marcação; sem a fase em andamento (ex.: armazenamento perdido), fica nulo no banco. */
+  lerMarcacao(slug: string): TemposDaMarcacao | undefined {
+    const estado = this.lerEstado(slug);
+    if (estado?.fase !== 'marcacao') {
+      return undefined;
+    }
+    const agora = Date.now();
+    const pausa = estado.pausadoEm === null ? 0 : agora - estado.pausadoEm;
+    return { totalMs: agora - estado.inicio, ocultoMs: estado.ocultoMs + pausa };
   }
 
   limpar(): void {
