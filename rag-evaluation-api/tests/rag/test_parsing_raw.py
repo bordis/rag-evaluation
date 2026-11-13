@@ -3,6 +3,8 @@ import zipfile
 from types import SimpleNamespace
 
 import pytest
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from app.rag.parsing.base import MIMES_SUPORTADOS, ErroDeParsing
 from app.rag.parsing.raw import extrair_texto_raw
@@ -72,6 +74,50 @@ def test_pdf_junta_as_paginas_e_conta_quantas_sao(monkeypatch):
     resultado = extrair_texto_raw(b"%PDF-1.4", "application/pdf", "lgpd.pdf")
     assert resultado.texto == "Pagina um\nPagina dois"
     assert resultado.metadados == {"parser": "raw", "paginas": 3}
+
+
+def _pdf_com_conteudo(*conteudos: bytes) -> bytes:
+    """PDF de verdade com uma pagina por content stream, fonte Helvetica como /F1."""
+    escritor = PdfWriter()
+    fonte = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    for conteudo in conteudos:
+        pagina = escritor.add_blank_page(width=612, height=792)
+        pagina[NameObject("/Resources")] = DictionaryObject(
+            {NameObject("/Font"): DictionaryObject({NameObject("/F1"): fonte})}
+        )
+        stream = DecodedStreamObject()
+        stream.set_data(conteudo)
+        pagina[NameObject("/Contents")] = escritor._add_object(stream)
+    buffer = io.BytesIO()
+    escritor.write(buffer)
+    return buffer.getvalue()
+
+
+def test_pdf_do_dompdf_com_nulos_fora_das_strings_e_reparado():
+    """Export do BookStack (dompdf, texto justificado) grava \\x00 entre os itens do TJ."""
+    integra = b"BT /F1 12 Tf 72 720 Td [(Pagina) -100 (integra)] TJ ET"
+    defeituosa = b"BT /F1 12 Tf 72 720 Td [(Texto)\x00 -321\x00 (justificado)\x00 ] TJ ET"
+    resultado = extrair_texto_raw(
+        _pdf_com_conteudo(integra, defeituosa), "application/pdf", "bookstack.pdf"
+    )
+    assert "Texto" in resultado.texto
+    assert "justificado" in resultado.texto
+    assert "integra" in resultado.texto
+    assert resultado.metadados == {"parser": "raw", "paginas": 2, "paginas_reparadas": [2]}
+
+
+def test_reparo_preserva_nulos_dentro_das_strings():
+    from app.rag.parsing.raw import _remover_nulos_fora_de_strings
+
+    # Parentese escapado e parenteses aninhados nao encerram a string.
+    conteudo = b"[(\x00A\\)\x00(\x00B)\x00)\x00 -5\x00 (C)] TJ"
+    assert _remover_nulos_fora_de_strings(conteudo) == b"[(\x00A\\)\x00(\x00B)\x00) -5 (C)] TJ"
 
 
 def test_pdf_corrompido_vira_erro_de_parsing():

@@ -40,6 +40,7 @@ rótulos A/B/C/D de novo, então a posição também não é pista.
 | Reordenador | `bge-reranker-v2-m3`, em serviço próprio no formato `/v1/rerank`, recebendo a pergunta original |
 | Segmentação | 256 tokens (`cl100k_base`) em frases inteiras, sem sobreposição, igual nos dois parsers |
 | Índice denso | `FLAT` com cosseno: busca exata, sem parâmetros |
+| Parser raw | `pypdf`, sem estrutura; páginas com bytes nulos fora das strings (export do dompdf, usado pelo BookStack) são reparadas e lidas de novo, e ficam em `paginas_reparadas` nos metadados da ingestão |
 | Docling | `pypdfium2`, tabelas `accurate`, sem OCR, descrição de imagens com `DOCLING_IMAGEM_MODELO` (área mínima 5%) |
 | Geração | `CHAT_MODEL`, temperatura 0,3, até 1024 tokens |
 | Embedding | `EMBEDDING_MODEL` para os trechos e `EMBEDDING_MODEL_QUERY` para a pergunta, com `EMBEDDING_DIMENSIONS` dimensões |
