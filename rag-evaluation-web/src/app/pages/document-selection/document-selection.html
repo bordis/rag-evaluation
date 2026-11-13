@@ -22,19 +22,31 @@
   @if (erro(); as mensagem) {
     <div class="aviso aviso--erro" role="alert">
       <p class="aviso__text">{{ mensagem }}</p>
-      <button type="button" class="btn btn--secondary" (click)="recarregar()">
-        Tentar novamente
+      <button
+        type="button"
+        class="btn btn--secondary"
+        [disabled]="carregando()"
+        [attr.aria-busy]="carregando()"
+        (click)="recarregar()"
+      >
+        @if (carregando()) {
+          <span class="spinner" aria-hidden="true"></span>Tentando…
+        } @else {
+          Tentar novamente
+        }
       </button>
     </div>
   }
 
   @if (carregando() && documentos().length === 0) {
-    <p class="aviso" role="status">Carregando documentos…</p>
+    <p class="aviso" role="status">
+      <span class="spinner" aria-hidden="true"></span>Carregando documentos…
+    </p>
   } @else if (documentos().length === 0 && !erro()) {
     <div class="aviso" role="status">
       <p class="aviso__text">
-        Nenhum documento disponível ainda. Assim que um documento for disponibilizado, ele
-        aparece aqui.
+        Nenhum documento disponível ainda. Assim que um documento for disponibilizado, ele aparece
+        aqui.
       </p>
     </div>
   } @else {
@@ -45,6 +57,7 @@
             [documento]="doc"
             [respondidas]="respondidas(doc.slug)"
             [total]="maxPerguntas()"
+            [abrindo]="abrindo() === doc.slug"
             (selecionar)="abrir($event)"
           />
         </li>

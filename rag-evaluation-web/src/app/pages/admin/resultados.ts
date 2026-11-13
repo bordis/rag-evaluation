@@ -147,6 +147,7 @@ export class AdminResultados {
   protected readonly atualizando = signal(false);
   protected readonly atualizadoEm = signal<Date | null>(null);
   protected readonly disparando = signal(false);
+  protected readonly exportando = signal(false);
 
   protected readonly abaAtiva = computed<AbaId>(() => {
     const pedida = this.aba();
@@ -444,6 +445,10 @@ export class AdminResultados {
   }
 
   protected async exportarCsv(): Promise<void> {
+    if (this.exportando()) {
+      return;
+    }
+    this.exportando.set(true);
     try {
       const csv = await this.api.baixarExportacao(this.studyId());
       const url = URL.createObjectURL(csv);
@@ -454,6 +459,8 @@ export class AdminResultados {
       URL.revokeObjectURL(url);
     } catch (erro) {
       this.erro.set((erro as Error).message);
+    } finally {
+      this.exportando.set(false);
     }
   }
 

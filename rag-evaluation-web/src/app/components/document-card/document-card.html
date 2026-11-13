@@ -1,4 +1,4 @@
-<button type="button" class="card" (click)="onSelecionar()">
+<button type="button" class="card" [attr.aria-busy]="abrindo()" (click)="onSelecionar()">
   <span class="card__icon" aria-hidden="true">{{ documento().icone }}</span>
 
   <span class="card__area">{{ documento().area }}</span>
@@ -7,6 +7,10 @@
 
   <span class="card__footer">
     <app-progress-badge [respondidas]="respondidas()" [total]="total()" />
-    <span class="card__cta">Avaliar →</span>
+    @if (abrindo()) {
+      <span class="card__cta"><span class="spinner" aria-hidden="true"></span>Abrindo…</span>
+    } @else {
+      <span class="card__cta">Avaliar →</span>
+    }
   </span>
 </button>

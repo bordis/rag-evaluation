@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { RouterLink } from '@angular/router';
 
 import { ApiAdmin, type Estudo } from '../../services/api-admin';
+import { Ocupado } from '../../services/ocupado';
 
 /** Abre e encerra estudos. Só com um estudo aberto o avaliador responde; cada um começa zerado. */
 @Component({
@@ -16,6 +17,7 @@ export class AdminEstudos {
 
   protected readonly estudos = signal<Estudo[]>([]);
   protected readonly erro = signal<string | null>(null);
+  protected readonly ocupado = new Ocupado();
 
   constructor() {
     void this.carregar();
@@ -38,13 +40,15 @@ export class AdminEstudos {
     const formulario = evento.target as HTMLFormElement;
     const dados = new FormData(formulario);
     this.erro.set(null);
-    try {
-      await this.api.criarEstudo(String(dados.get('nome')), String(dados.get('descricao') ?? ''));
-      formulario.reset();
-      await this.carregar();
-    } catch (erro) {
-      this.erro.set((erro as Error).message);
-    }
+    await this.ocupado.durante('criar', async () => {
+      try {
+        await this.api.criarEstudo(String(dados.get('nome')), String(dados.get('descricao') ?? ''));
+        formulario.reset();
+        await this.carregar();
+      } catch (erro) {
+        this.erro.set((erro as Error).message);
+      }
+    });
   }
 
   protected async encerrar(estudo: Estudo): Promise<void> {
@@ -52,11 +56,13 @@ export class AdminEstudos {
       return;
     }
     this.erro.set(null);
-    try {
-      await this.api.encerrarEstudo(estudo.id);
-      await this.carregar();
-    } catch (erro) {
-      this.erro.set((erro as Error).message);
-    }
+    await this.ocupado.durante('encerrar:' + estudo.id, async () => {
+      try {
+        await this.api.encerrarEstudo(estudo.id);
+        await this.carregar();
+      } catch (erro) {
+        this.erro.set((erro as Error).message);
+      }
+    });
   }
 }

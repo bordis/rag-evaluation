@@ -15,6 +15,8 @@ export class DocumentCard {
   readonly documento = input.required<RagDocument>();
   readonly respondidas = input.required<number>();
   readonly total = input.required<number>();
+  /** A tela deste documento está carregando depois do clique. */
+  readonly abrindo = input(false);
 
   /** Emite o `slug`, que é o identificador usado na rota `/avaliacao/:docId`. */
   readonly selecionar = output<string>();

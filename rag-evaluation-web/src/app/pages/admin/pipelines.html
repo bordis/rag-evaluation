@@ -26,23 +26,57 @@
           <textarea #config class="adm-json" rows="12">{{ pipeline.config | json }}</textarea>
         </label>
         <div class="adm-acoes">
+          @let salvando = ocupado.em('salvar:' + pipeline.id);
           <button
             class="adm-btn adm-btn--primario"
             type="button"
+            [disabled]="salvando"
+            [attr.aria-busy]="salvando"
             (click)="salvar(pipeline, config.value)"
           >
-            Salvar
+            @if (salvando) {
+              <span class="spinner" aria-hidden="true"></span>Salvando…
+            } @else {
+              Salvar
+            }
           </button>
-          <button class="adm-btn" type="button" (click)="editando.set(null)">Cancelar</button>
+          <button class="adm-btn" type="button" [disabled]="salvando" (click)="editando.set(null)">
+            Cancelar
+          </button>
         </div>
       } @else {
         <pre class="adm-json">{{ pipeline.config | json }}</pre>
         <div class="adm-acoes">
           <button class="adm-btn" type="button" (click)="editando.set(pipeline.id)">Editar</button>
-          <button class="adm-btn" type="button" (click)="alternar(pipeline)">
-            {{ pipeline.ativo ? 'Desativar' : 'Ativar' }}
+          @let alternando = ocupado.em('alternar:' + pipeline.id);
+          @let excluindo = ocupado.em('excluir:' + pipeline.id);
+          <button
+            class="adm-btn"
+            type="button"
+            [disabled]="alternando || excluindo"
+            [attr.aria-busy]="alternando"
+            (click)="alternar(pipeline)"
+          >
+            @if (alternando) {
+              <span class="spinner" aria-hidden="true"></span>
+              {{ pipeline.ativo ? 'Desativando…' : 'Ativando…' }}
+            } @else {
+              {{ pipeline.ativo ? 'Desativar' : 'Ativar' }}
+            }
           </button>
-          <button class="adm-btn" type="button" (click)="excluir(pipeline)">Excluir</button>
+          <button
+            class="adm-btn"
+            type="button"
+            [disabled]="alternando || excluindo"
+            [attr.aria-busy]="excluindo"
+            (click)="excluir(pipeline)"
+          >
+            @if (excluindo) {
+              <span class="spinner" aria-hidden="true"></span>Excluindo…
+            } @else {
+              Excluir
+            }
+          </button>
         </div>
       }
     </article>
@@ -71,5 +105,16 @@
     Collection do Milvus
     <input name="collection_name" required pattern="[A-Za-z_][A-Za-z0-9_]*" />
   </label>
-  <button class="adm-btn adm-btn--primario" type="submit">Criar</button>
+  <button
+    class="adm-btn adm-btn--primario"
+    type="submit"
+    [disabled]="ocupado.em('criar')"
+    [attr.aria-busy]="ocupado.em('criar')"
+  >
+    @if (ocupado.em('criar')) {
+      <span class="spinner" aria-hidden="true"></span>Criando…
+    } @else {
+      Criar
+    }
+  </button>
 </form>

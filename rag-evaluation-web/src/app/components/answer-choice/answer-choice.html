@@ -39,8 +39,18 @@
         />
         Nenhuma das outras está correta
       </label>
-      <button type="button" class="confirmar" [disabled]="!podeConfirmar()" (click)="onConfirmar()">
-        Confirmar
+      <button
+        type="button"
+        class="confirmar"
+        [disabled]="!podeConfirmar() || !!enviando()"
+        [attr.aria-busy]="enviando() === 'confirmar'"
+        (click)="onConfirmar()"
+      >
+        @if (enviando() === 'confirmar') {
+          <span class="spinner" aria-hidden="true"></span>Confirmando…
+        } @else {
+          Confirmar
+        }
       </button>
     </div>
   </fieldset>
@@ -52,8 +62,13 @@
       type="button"
       class="nenhuma surgir"
       [style.--ordem]="round().respostas.length + 1"
+      [disabled]="!!enviando()"
+      [attr.aria-busy]="enviando() === 'nenhuma'"
       (click)="onEscolher(null)"
     >
+      @if (enviando() === 'nenhuma') {
+        <span class="spinner" aria-hidden="true"></span>
+      }
       Nenhuma das respostas está correta
     </button>
   }
@@ -86,8 +101,18 @@
 
         @switch (etapa()) {
           @case ('escolha') {
-            <button type="button" class="answer__btn" (click)="onEscolher(resposta.rotuloCego)">
-              Escolher esta
+            <button
+              type="button"
+              class="answer__btn"
+              [disabled]="!!enviando()"
+              [attr.aria-busy]="enviando() === resposta.rotuloCego"
+              (click)="onEscolher(resposta.rotuloCego)"
+            >
+              @if (enviando() === resposta.rotuloCego) {
+                <span class="spinner" aria-hidden="true"></span>Enviando…
+              } @else {
+                Escolher esta
+              }
             </button>
           }
           @case ('marcacao') {

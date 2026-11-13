@@ -73,9 +73,15 @@
           {{ segundos(atual.tempo_marcacao_oculto_ms) }}
         </p>
       }
-      <button class="adm-btn" type="button" [disabled]="calculando()" (click)="calcularRagas()">
+      <button
+        class="adm-btn"
+        type="button"
+        [disabled]="calculando()"
+        [attr.aria-busy]="calculando()"
+        (click)="calcularRagas()"
+      >
         @if (calculando()) {
-          Calculando…
+          <span class="spinner" aria-hidden="true"></span>Calculando…
         } @else {
           Calcular RAGAS desta rodada (gasta créditos)
         }

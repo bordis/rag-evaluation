@@ -117,7 +117,7 @@
   outline-offset: 2px;
 }
 
-.answer__btn:disabled {
+.answer__btn:disabled:not([aria-busy='true']) {
   background-color: var(--color-primary-disabled);
   color: var(--color-muted);
   cursor: not-allowed;
@@ -252,7 +252,7 @@
   outline-offset: 2px;
 }
 
-.confirmar:disabled {
+.confirmar:disabled:not([aria-busy='true']) {
   background-color: var(--color-primary-disabled);
   color: var(--color-muted);
   cursor: not-allowed;
@@ -273,7 +273,12 @@
   transition: background-color 0.2s ease;
 }
 
-.nenhuma:hover {
+.nenhuma:disabled:not([aria-busy='true']) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.nenhuma:hover:not(:disabled) {
   background-color: var(--color-surface-soft);
   color: var(--color-ink);
 }

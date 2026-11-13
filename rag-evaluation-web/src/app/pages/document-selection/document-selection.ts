@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { DocumentCard } from '../../components/document-card/document-card';
@@ -21,6 +21,8 @@ export class DocumentSelection {
   protected readonly carregando = this.store.carregando;
   protected readonly erro = this.store.erro;
   protected readonly maxPerguntas = this.store.maxPerguntas;
+  /** Documento clicado cuja tela ainda está carregando: o card mostra o spinner. */
+  protected readonly abrindo = signal<string | null>(null);
 
   constructor() {
     void this.store.carregarCatalogo();
@@ -30,8 +32,17 @@ export class DocumentSelection {
     return this.store.answeredCount(slug);
   }
 
-  protected abrir(slug: string): void {
-    this.router.navigate(['/avaliacao', slug]);
+  protected async abrir(slug: string): Promise<void> {
+    if (this.abrindo()) {
+      return;
+    }
+    this.abrindo.set(slug);
+    try {
+      await this.router.navigate(['/avaliacao', slug]);
+    } finally {
+      // Navegação cancelada (guard) deixa o avaliador aqui: o card volta ao normal.
+      this.abrindo.set(null);
+    }
   }
 
   protected recarregar(): void {

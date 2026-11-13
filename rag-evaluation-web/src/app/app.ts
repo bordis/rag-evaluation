@@ -6,12 +6,27 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  NavigationStart,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
 import Keycloak from 'keycloak-js';
 
 import { ROLE_ADMIN, temRole } from './auth/autenticacao';
 
 type Painel = 'pesquisador' | 'conta';
+
+/**
+ * Só mostra a barra de carregamento se a troca de tela demorar mais que isto: navegações
+ * instantâneas (rota já baixada, guard sem chamada) não piscam a barra.
+ */
+const ATRASO_BARRA_MS = 150;
 
 /** Itens da área do pesquisador, com uma linha que diz para que serve cada tela. */
 const ITENS_PESQUISADOR = [
@@ -63,15 +78,35 @@ export class App {
 
   protected readonly aberto = signal<Painel | null>(null);
   protected readonly naAreaPesquisador = signal(false);
+  /** Troca de tela em andamento: lazy load da página e guards que consultam a API. */
+  protected readonly navegando = signal(false);
+  protected readonly saindo = signal(false);
 
   constructor() {
+    let atraso: ReturnType<typeof setTimeout> | undefined;
     const inscricao = this.router.events.subscribe((evento) => {
+      if (evento instanceof NavigationStart) {
+        clearTimeout(atraso);
+        atraso = setTimeout(() => this.navegando.set(true), ATRASO_BARRA_MS);
+        return;
+      }
+      if (
+        evento instanceof NavigationEnd ||
+        evento instanceof NavigationCancel ||
+        evento instanceof NavigationError
+      ) {
+        clearTimeout(atraso);
+        this.navegando.set(false);
+      }
       if (evento instanceof NavigationEnd) {
         this.naAreaPesquisador.set(evento.urlAfterRedirects.startsWith('/admin'));
         this.fechar();
       }
     });
-    inject(DestroyRef).onDestroy(() => inscricao.unsubscribe());
+    inject(DestroyRef).onDestroy(() => {
+      clearTimeout(atraso);
+      inscricao.unsubscribe();
+    });
   }
 
   protected alternar(painel: Painel): void {
@@ -93,6 +128,13 @@ export class App {
   }
 
   protected sair(): void {
-    void this.keycloak.logout({ redirectUri: document.baseURI });
+    if (this.saindo()) {
+      return;
+    }
+    // O logout sai do app para o Keycloak: o spinner cobre o tempo até o redirecionamento.
+    this.saindo.set(true);
+    void this.keycloak
+      .logout({ redirectUri: document.baseURI })
+      .catch(() => this.saindo.set(false));
   }
 }

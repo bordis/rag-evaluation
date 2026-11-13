@@ -21,6 +21,9 @@ import {
 } from '../../models/evaluation-model';
 import { MarkdownPipe } from '../../pipes/markdown-pipe';
 
+/** O botão cujo envio está esperando o servidor: um rótulo, "nenhuma" ou a confirmação. */
+export type EnvioRodada = RotuloCego | 'nenhuma' | 'confirmar';
+
 /**
  * Apresenta as respostas candidatas ÀS CEGAS (rótulos A/B/C/D), em dois passos. No primeiro, o
  * avaliador escolhe a preferida ou indica que nenhuma está correta. Se escolheu uma, no segundo
@@ -38,6 +41,8 @@ import { MarkdownPipe } from '../../pipes/markdown-pipe';
 })
 export class AnswerChoice {
   readonly round = input.required<QuestionRound>();
+  /** Envio em andamento (a trava é da página): o botão clicado gira e os outros não respondem. */
+  readonly enviando = input<EnvioRodada | null>(null);
 
   /** `null` significa que nenhuma resposta está correta. */
   readonly escolher = output<RotuloCego | null>();
@@ -101,7 +106,7 @@ export class AnswerChoice {
   }
 
   protected onEscolher(rotulo: RotuloCego | null): void {
-    if (this.decidida()) {
+    if (this.decidida() || this.enviando()) {
       return;
     }
     this.escolher.emit(rotulo);
@@ -128,7 +133,7 @@ export class AnswerChoice {
   }
 
   protected onConfirmar(): void {
-    if (this.etapa() !== 'marcacao' || !this.podeConfirmar()) {
+    if (this.etapa() !== 'marcacao' || !this.podeConfirmar() || this.enviando()) {
       return;
     }
     // Na ordem em que as respostas aparecem, não na ordem dos cliques.

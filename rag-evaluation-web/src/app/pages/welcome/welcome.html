@@ -23,7 +23,9 @@
   </ol>
 
   @if (carregando()) {
-    <p class="hero__note" role="status">Verificando se a avaliação está aberta…</p>
+    <p class="hero__note" role="status">
+      <span class="spinner" aria-hidden="true"></span>Verificando se a avaliação está aberta…
+    </p>
   } @else if (erro(); as mensagem) {
     <p #alvo class="aviso" role="alert">{{ mensagem }}</p>
   } @else if (!estudo()) {
@@ -64,8 +66,18 @@
       </label>
     </section>
 
-    <button type="button" class="cta" [disabled]="!aceite() || enviando()" (click)="comecar()">
-      Começar avaliação
+    <button
+      type="button"
+      class="cta"
+      [disabled]="!aceite() || enviando()"
+      [attr.aria-busy]="enviando()"
+      (click)="comecar()"
+    >
+      @if (enviando()) {
+        <span class="spinner" aria-hidden="true"></span>Preparando a avaliação…
+      } @else {
+        Começar avaliação
+      }
     </button>
 
     <p class="hero__note">

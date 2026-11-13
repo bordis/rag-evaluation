@@ -2,6 +2,7 @@ import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 
 import { ApiAdmin, type PipelineAdmin } from '../../services/api-admin';
+import { Ocupado } from '../../services/ocupado';
 
 /**
  * CRUD dos pipelines. O servidor impõe as travas: braço de controle sem técnicas avançadas, nada
@@ -19,6 +20,7 @@ export class AdminPipelines {
   protected readonly pipelines = signal<PipelineAdmin[]>([]);
   protected readonly editando = signal<number | null>(null);
   protected readonly erro = signal<string | null>(null);
+  protected readonly ocupado = new Ocupado();
 
   constructor() {
     void this.executar(async () => undefined);
@@ -44,18 +46,25 @@ export class AdminPipelines {
       this.erro.set('A configuração não é um JSON válido.');
       return;
     }
-    if (await this.executar(() => this.api.atualizarPipeline(pipeline.id, { config }))) {
+    const salvo = await this.ocupado.durante('salvar:' + pipeline.id, () =>
+      this.executar(() => this.api.atualizarPipeline(pipeline.id, { config })),
+    );
+    if (salvo) {
       this.editando.set(null);
     }
   }
 
   protected alternar(pipeline: PipelineAdmin): void {
-    void this.executar(() => this.api.atualizarPipeline(pipeline.id, { ativo: !pipeline.ativo }));
+    void this.ocupado.durante('alternar:' + pipeline.id, () =>
+      this.executar(() => this.api.atualizarPipeline(pipeline.id, { ativo: !pipeline.ativo })),
+    );
   }
 
   protected excluir(pipeline: PipelineAdmin): void {
     if (confirm(`Excluir ${pipeline.codigo}?`)) {
-      void this.executar(() => this.api.excluirPipeline(pipeline.id));
+      void this.ocupado.durante('excluir:' + pipeline.id, () =>
+        this.executar(() => this.api.excluirPipeline(pipeline.id)),
+      );
     }
   }
 
@@ -63,14 +72,16 @@ export class AdminPipelines {
     evento.preventDefault();
     const formulario = evento.target as HTMLFormElement;
     const dados = new FormData(formulario);
-    const criado = await this.executar(() =>
-      this.api.criarPipeline({
-        codigo: String(dados.get('codigo')),
-        nome: String(dados.get('nome')),
-        parser: dados.get('parser') as PipelineAdmin['parser'],
-        collection_name: String(dados.get('collection_name')),
-        config: { top_k: 15 },
-      }),
+    const criado = await this.ocupado.durante('criar', () =>
+      this.executar(() =>
+        this.api.criarPipeline({
+          codigo: String(dados.get('codigo')),
+          nome: String(dados.get('nome')),
+          parser: dados.get('parser') as PipelineAdmin['parser'],
+          collection_name: String(dados.get('collection_name')),
+          config: { top_k: 15 },
+        }),
+      ),
     );
     if (criado) {
       formulario.reset();

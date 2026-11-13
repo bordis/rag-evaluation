@@ -9,10 +9,28 @@
 }
 
 <div class="adm-acoes">
-  <button class="adm-btn" type="button" (click)="exportarCsv()">Exportar CSV</button>
-  <button class="adm-btn" type="button" [disabled]="atualizando()" (click)="carregar()">
+  <button
+    class="adm-btn"
+    type="button"
+    [disabled]="exportando()"
+    [attr.aria-busy]="exportando()"
+    (click)="exportarCsv()"
+  >
+    @if (exportando()) {
+      <span class="spinner" aria-hidden="true"></span>Exportando…
+    } @else {
+      Exportar CSV
+    }
+  </button>
+  <button
+    class="adm-btn"
+    type="button"
+    [disabled]="atualizando()"
+    [attr.aria-busy]="atualizando()"
+    (click)="carregar()"
+  >
     @if (atualizando()) {
-      Atualizando…
+      <span class="spinner" aria-hidden="true"></span>Atualizando…
     } @else {
       Atualizar
     }
@@ -902,10 +920,11 @@
             class="adm-btn"
             type="button"
             [disabled]="disparando() || situacao.em_andamento"
+            [attr.aria-busy]="disparando() || situacao.em_andamento"
             (click)="calcularRagas()"
           >
-            @if (situacao.em_andamento) {
-              Calculando RAGAS…
+            @if (disparando() || situacao.em_andamento) {
+              <span class="spinner" aria-hidden="true"></span>Calculando RAGAS…
             } @else {
               Calcular RAGAS do estudo (gasta créditos)
             }
@@ -1413,5 +1432,7 @@
     }
   }
 } @else if (atualizando()) {
-  <p class="vazio">Carregando resultados…</p>
+  <p class="vazio" role="status">
+    <span class="spinner" aria-hidden="true"></span>Carregando resultados…
+  </p>
 }

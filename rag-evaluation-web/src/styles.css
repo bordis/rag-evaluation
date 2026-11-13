@@ -118,6 +118,62 @@ button {
   }
 }
 
+/*
+ * Spinner: anel na cor do texto, para servir em botão primário (branco), secundário e aviso.
+ * Sempre `aria-hidden`: quem anuncia a espera é o `aria-busy` do botão ou o `role="status"`.
+ */
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin-inline-end: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.15em;
+  animation: spinner-girar 0.7s linear infinite;
+}
+
+/* Em botões flex o espaço já vem do `gap`. */
+.spinner--solto {
+  margin-inline-end: 0;
+}
+
+@keyframes spinner-girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* O giro é o próprio aviso de espera: fica, só mais lento. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+/*
+ * A tela nova entra com um fade curto. Fica aqui, e não em app.css, porque o host da página é
+ * criado pelo router ao lado do <router-outlet> e não recebe o atributo de encapsulamento do App.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  main.content > router-outlet + * {
+    animation: tela-entrar 0.25s ease-out;
+  }
+}
+
+@keyframes tela-entrar {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Botão esperando o servidor: mantém a cor (não parece "indisponível") e não aceita outro clique. */
+button[aria-busy='true'] {
+  cursor: progress;
+}
+
 /* Texto vindo de Markdown: o HTML é injetado, então o estilo não pode ficar encapsulado. */
 .md > :first-child {
   margin-top: 0;
@@ -350,7 +406,7 @@ button {
   background-color: var(--color-primary-active);
 }
 
-.adm-btn:disabled {
+.adm-btn:disabled:not([aria-busy='true']) {
   opacity: 0.6;
   cursor: default;
 }

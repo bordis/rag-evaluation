@@ -87,6 +87,14 @@ canvas, blue primary `#4264cd` — not the `#557cf2` of Procempa's buttons, whic
 are mirrored as CSS custom properties in `src/styles.css` (never inline hex); fonts are the open substitutes
 Cormorant Garamond / Inter / JetBrains Mono, loaded from Google Fonts in `src/index.html`.
 
+**Loading feedback (every click that waits, every screen change):** a button whose action waits on the server
+or on navigation shows the global `.spinner` *inside itself* (`<span class="spinner" aria-hidden="true">`), gets
+`[attr.aria-busy]` and refuses a second click; its `:disabled` style must exclude `[aria-busy='true']` so it keeps
+its colour. Per-item busy state in the admin screens uses `services/ocupado.ts` (`ocupado.durante('excluir:' + id, …)`).
+Screen transitions are handled once in `App`: after 150 ms of a pending navigation an indeterminate bar runs on the
+topbar's bottom edge, the old screen fades (`content--navegando`) and an sr-only status announces it; the new screen
+fades in (rule in `styles.css`). In-page "Carregando…" messages carry the same spinner.
+
 As the codebase grows, prefer updating this file with real architectural notes over letting it go stale.
 
 ## READMEs

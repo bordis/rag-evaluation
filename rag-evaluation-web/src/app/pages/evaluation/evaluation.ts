@@ -17,7 +17,7 @@ import {
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import { Router, RouterLink } from '@angular/router';
 
-import { AnswerChoice } from '../../components/answer-choice/answer-choice';
+import { AnswerChoice, type EnvioRodada } from '../../components/answer-choice/answer-choice';
 import { ChatMessage } from '../../components/chat-message/chat-message';
 import { ProgressoEtapas } from '../../components/progresso-etapas/progresso-etapas';
 import { aguardaMarcacao, rodadaCompleta, type RotuloCego } from '../../models/evaluation-model';
@@ -55,8 +55,13 @@ export class Evaluation implements OnDestroy {
   private readonly etapa = viewChild<ElementRef<HTMLElement>>('etapa');
   private readonly campoPergunta = viewChild<ElementRef<HTMLTextAreaElement>>('campoPergunta');
 
-  /** Trava contra duplo envio, na escolha e na confirmação da marcação. */
-  private enviando = false;
+  /**
+   * Trava contra duplo envio, na escolha e na confirmação da marcação. Guarda o que foi clicado
+   * (o rótulo, `'nenhuma'` ou `'confirmar'`) para o spinner aparecer naquele botão.
+   */
+  protected readonly envio = signal<EnvioRodada | null>(null);
+  /** Para onde a navegação pedida por um botão está indo, enquanto a outra tela carrega. */
+  protected readonly navegandoPara = signal<'proximo' | 'documentos' | null>(null);
 
   /** Vem do parâmetro de rota `:docId` via componentInputBinding — é o `slug` do documento. */
   readonly docId = input.required<string>();
@@ -179,14 +184,14 @@ export class Evaluation implements OnDestroy {
 
   protected async escolher(roundId: string, rotulo: RotuloCego | null): Promise<void> {
     // Um segundo clique antes da resposta do servidor viraria um 409 na tela.
-    if (this.enviando) {
+    if (this.envio()) {
       return;
     }
-    this.enviando = true;
+    this.envio.set(rotulo ?? 'nenhuma');
     try {
       await this.store.chooseAnswer(this.docId(), roundId, rotulo);
     } finally {
-      this.enviando = false;
+      this.envio.set(null);
     }
     // Com uma vencedora, a tela fica para a marcação, e o componente leva o foco à pergunta.
     const rodada = this.rounds().find((item) => item.id === roundId);
@@ -196,14 +201,14 @@ export class Evaluation implements OnDestroy {
   }
 
   protected async confirmarMarcacao(roundId: string, rotulos: RotuloCego[]): Promise<void> {
-    if (this.enviando) {
+    if (this.envio()) {
       return;
     }
-    this.enviando = true;
+    this.envio.set('confirmar');
     try {
       await this.store.confirmarTambemCorretas(this.docId(), roundId, rotulos);
     } finally {
-      this.enviando = false;
+      this.envio.set(null);
     }
     if (!this.erro()) {
       this.irParaOTopo();
@@ -244,14 +249,27 @@ export class Evaluation implements OnDestroy {
   }
 
   protected irParaDocumentos(): void {
-    this.router.navigate(['/documentos']);
+    void this.navegar('documentos', ['/documentos']);
   }
 
   protected irParaProximo(): void {
     const proximo = this.proximoDocumento();
     if (proximo) {
-      this.router.navigate(['/avaliacao', proximo.slug]);
+      void this.navegar('proximo', ['/avaliacao', proximo.slug]);
       this.rascunho.set('');
+    }
+  }
+
+  private async navegar(destino: 'proximo' | 'documentos', rota: string[]): Promise<void> {
+    if (this.navegandoPara()) {
+      return;
+    }
+    this.navegandoPara.set(destino);
+    try {
+      await this.router.navigate(rota);
+    } finally {
+      // Ir ao próximo documento reaproveita este componente: o botão não pode ficar girando.
+      this.navegandoPara.set(null);
     }
   }
 

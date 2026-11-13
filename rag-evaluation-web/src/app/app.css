@@ -258,11 +258,69 @@
 
 .content {
   display: block;
+  transition: opacity 0.2s ease;
+}
+
+/*
+ * Troca de tela. A barra corre sobre o filete inferior da topbar (que é sticky, então ela fica
+ * visível mesmo com a página rolada) e a tela que está saindo esmaece: o conteúdo antigo não
+ * parece mais "clicável", mas também não some antes de a nova tela estar pronta.
+ */
+.carregando-tela {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  overflow: hidden;
+  background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  pointer-events: none;
+}
+
+.carregando-tela::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  animation: carregando-tela 1.1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes carregando-tela {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.content--navegando {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .painel {
     animation: none;
+  }
+
+  /* Sem deslizar: a barra inteira pulsa devagar. */
+  .carregando-tela::before {
+    width: 100%;
+    animation: carregando-tela-pulso 1.6s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes carregando-tela-pulso {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
   }
 }
 

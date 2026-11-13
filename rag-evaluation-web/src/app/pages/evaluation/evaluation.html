@@ -40,11 +40,29 @@
             </p>
             <div class="done__actions">
               @if (proximoDocumento(); as prox) {
-                <button type="button" class="btn btn--primary" (click)="irParaProximo()">
+                <button
+                  type="button"
+                  class="btn btn--primary"
+                  [disabled]="!!navegandoPara()"
+                  [attr.aria-busy]="navegandoPara() === 'proximo'"
+                  (click)="irParaProximo()"
+                >
+                  @if (navegandoPara() === 'proximo') {
+                    <span class="spinner" aria-hidden="true"></span>
+                  }
                   Avaliar próximo: {{ prox.titulo }}
                 </button>
               }
-              <button type="button" class="btn btn--secondary" (click)="irParaDocumentos()">
+              <button
+                type="button"
+                class="btn btn--secondary"
+                [disabled]="!!navegandoPara()"
+                [attr.aria-busy]="navegandoPara() === 'documentos'"
+                (click)="irParaDocumentos()"
+              >
+                @if (navegandoPara() === 'documentos') {
+                  <span class="spinner" aria-hidden="true"></span>
+                }
                 Ver todos os documentos
               </button>
             </div>
@@ -55,6 +73,7 @@
             <app-chat-message [pergunta]="rodada.pergunta" />
             <app-answer-choice
               [round]="rodada"
+              [enviando]="envio()"
               (escolher)="escolher(rodada.id, $event)"
               (confirmarMarcacao)="confirmarMarcacao(rodada.id, $event)"
               (respostaVista)="registrarVista($event)"
@@ -71,7 +90,9 @@
           </div>
         }
         @case ('carregando') {
-          <p class="pensando__text" role="status">Carregando suas perguntas…</p>
+          <p class="pensando__text" role="status">
+            <span class="spinner" aria-hidden="true"></span>Carregando suas perguntas…
+          </p>
         }
         @default {
           @if (completas().length === 0) {
@@ -125,13 +146,17 @@
       } @else if (erroPdf()) {
         <p class="pdf__aviso" role="alert">Não foi possível abrir o PDF. Feche e tente de novo.</p>
       } @else {
-        <p class="pdf__aviso" role="status">Carregando o PDF…</p>
+        <p class="pdf__aviso" role="status">
+          <span class="spinner" aria-hidden="true"></span>Carregando o PDF…
+        </p>
       }
     </aside>
   }
 } @else if (carregando()) {
   <div class="missing">
-    <p class="missing__text" role="status">Carregando documento…</p>
+    <p class="missing__text" role="status">
+      <span class="spinner" aria-hidden="true"></span>Carregando documento…
+    </p>
   </div>
 } @else {
   <div class="missing">
@@ -143,7 +168,16 @@
         O documento solicitado não existe, ainda está em processamento ou o link está incorreto.
       }
     </p>
-    <button type="button" class="btn btn--primary" (click)="irParaDocumentos()">
+    <button
+      type="button"
+      class="btn btn--primary"
+      [disabled]="!!navegandoPara()"
+      [attr.aria-busy]="navegandoPara() === 'documentos'"
+      (click)="irParaDocumentos()"
+    >
+      @if (navegandoPara() === 'documentos') {
+        <span class="spinner" aria-hidden="true"></span>
+      }
       Voltar aos documentos
     </button>
   </div>

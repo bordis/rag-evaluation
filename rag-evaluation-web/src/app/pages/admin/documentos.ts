@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, type OnDestroy, signal } from '@angular/core';
 
 import { ApiAdmin, type DocumentoAdmin, type Ingestao } from '../../services/api-admin';
+import { Ocupado } from '../../services/ocupado';
 
 const INTERVALO_ATUALIZACAO_MS = 5000;
 
@@ -22,6 +23,7 @@ export class AdminDocumentos implements OnDestroy {
   protected readonly aberto = signal<string | null>(null);
   protected readonly enviando = signal(false);
   protected readonly erro = signal<string | null>(null);
+  protected readonly ocupado = new Ocupado();
 
   constructor() {
     void this.atualizar();
@@ -66,7 +68,7 @@ export class AdminDocumentos implements OnDestroy {
       return;
     }
     this.aberto.set(documento.id);
-    await this.atualizar();
+    await this.ocupado.durante('detalhes:' + documento.id, () => this.atualizar());
   }
 
   /** Documentos antigos não têm o arquivo; a API só aceita o mesmo PDF que foi ingerido. */
@@ -77,14 +79,16 @@ export class AdminDocumentos implements OnDestroy {
       return;
     }
     this.erro.set(null);
-    try {
-      await this.api.anexarPdf(documento.id, arquivo);
-      await this.atualizar();
-    } catch (erro) {
-      this.erro.set((erro as Error).message);
-    } finally {
-      campo.value = '';
-    }
+    await this.ocupado.durante('anexar:' + documento.id, async () => {
+      try {
+        await this.api.anexarPdf(documento.id, arquivo);
+        await this.atualizar();
+      } catch (erro) {
+        this.erro.set((erro as Error).message);
+      } finally {
+        campo.value = '';
+      }
+    });
   }
 
   protected async excluir(documento: DocumentoAdmin): Promise<void> {
@@ -92,11 +96,13 @@ export class AdminDocumentos implements OnDestroy {
       return;
     }
     this.erro.set(null);
-    try {
-      await this.api.excluirDocumento(documento.id);
-      await this.atualizar();
-    } catch (erro) {
-      this.erro.set((erro as Error).message);
-    }
+    await this.ocupado.durante('excluir:' + documento.id, async () => {
+      try {
+        await this.api.excluirDocumento(documento.id);
+        await this.atualizar();
+      } catch (erro) {
+        this.erro.set((erro as Error).message);
+      }
+    });
   }
 }

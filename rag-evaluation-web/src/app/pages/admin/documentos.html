@@ -26,9 +26,14 @@
     Descrição
     <input name="descricao" />
   </label>
-  <button class="adm-btn adm-btn--primario" type="submit" [disabled]="enviando()">
+  <button
+    class="adm-btn adm-btn--primario"
+    type="submit"
+    [disabled]="enviando()"
+    [attr.aria-busy]="enviando()"
+  >
     @if (enviando()) {
-      Enviando…
+      <span class="spinner" aria-hidden="true"></span>Enviando…
     } @else {
       Enviar
     }
@@ -69,7 +74,20 @@
           @if (documento.pdf_disponivel) {
             Guardado
           } @else {
-            <button class="adm-btn" type="button" (click)="seletorPdf.click()">Anexar PDF</button>
+            @let anexando = ocupado.em('anexar:' + documento.id);
+            <button
+              class="adm-btn"
+              type="button"
+              [disabled]="anexando"
+              [attr.aria-busy]="anexando"
+              (click)="seletorPdf.click()"
+            >
+              @if (anexando) {
+                <span class="spinner" aria-hidden="true"></span>Anexando…
+              } @else {
+                Anexar PDF
+              }
+            </button>
             <input
               #seletorPdf
               type="file"
@@ -81,10 +99,33 @@
           }
         </td>
         <td class="adm-acoes">
-          <button class="adm-btn" type="button" (click)="verIngestoes(documento)">
+          @let detalhando = ocupado.em('detalhes:' + documento.id);
+          @let excluindo = ocupado.em('excluir:' + documento.id);
+          <button
+            class="adm-btn"
+            type="button"
+            [disabled]="detalhando"
+            [attr.aria-busy]="detalhando"
+            (click)="verIngestoes(documento)"
+          >
+            @if (detalhando) {
+              <span class="spinner" aria-hidden="true"></span>
+            }
             Exibir detalhes
           </button>
-          <button class="adm-btn" type="button" (click)="excluir(documento)">Excluir</button>
+          <button
+            class="adm-btn"
+            type="button"
+            [disabled]="excluindo"
+            [attr.aria-busy]="excluindo"
+            (click)="excluir(documento)"
+          >
+            @if (excluindo) {
+              <span class="spinner" aria-hidden="true"></span>Excluindo…
+            } @else {
+              Excluir
+            }
+          </button>
         </td>
       </tr>
       @if (aberto() === documento.id) {

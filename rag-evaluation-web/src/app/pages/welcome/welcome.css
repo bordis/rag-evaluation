@@ -219,7 +219,7 @@
   cursor: pointer;
 }
 
-.cta:disabled {
+.cta:disabled:not([aria-busy='true']) {
   background-color: var(--color-primary-disabled);
   color: var(--color-muted);
   cursor: not-allowed;

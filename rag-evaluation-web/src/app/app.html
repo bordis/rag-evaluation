@@ -1,5 +1,14 @@
 <header class="topbar">
-  <a class="brand" routerLink="/" aria-label="Início — Avaliação de respostas geradas por IA do SmartGen">
+  <!-- Troca de tela: barra indeterminada na borda da topbar, sem cobrir o conteúdo. -->
+  @if (navegando()) {
+    <div class="carregando-tela" aria-hidden="true"></div>
+  }
+
+  <a
+    class="brand"
+    routerLink="/"
+    aria-label="Início — Avaliação de respostas geradas por IA do SmartGen"
+  >
     <svg class="brand__mark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
       <path
         fill="currentColor"
@@ -103,24 +112,35 @@
             <span class="painel__usuario">{{ usuario }}</span>
           }
         </div>
-        <button type="button" class="painel__acao" (click)="sair()">
-          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-            <path
-              d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11l3-3-3-3M13.5 8H6"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          Sair
+        <button
+          type="button"
+          class="painel__acao"
+          [disabled]="saindo()"
+          [attr.aria-busy]="saindo()"
+          (click)="sair()"
+        >
+          @if (saindo()) {
+            <span class="spinner spinner--solto" aria-hidden="true"></span>
+          } @else {
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path
+                d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 11l3-3-3-3M13.5 8H6"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          }
+          {{ saindo() ? 'Saindo…' : 'Sair' }}
         </button>
       </div>
     }
   </div>
 </header>
 
-<main class="content">
+<main class="content" [class.content--navegando]="navegando()" [attr.aria-busy]="navegando()">
   <router-outlet />
 </main>
+<p class="sr-only" role="status">{{ navegando() ? 'Carregando a página…' : '' }}</p>
