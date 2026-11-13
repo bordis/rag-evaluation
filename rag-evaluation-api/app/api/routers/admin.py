@@ -7,6 +7,8 @@ nesta fase, por decisao do estudo. TODO: proteger com o login previsto (decisao 
 import csv
 import io
 import uuid
+from collections import defaultdict
+from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import func
@@ -14,7 +16,7 @@ from sqlmodel import Session, select
 
 from app.core.auth import exigir_admin
 from app.core.db import SessionDep
-from app.models.document import Document
+from app.models.document import Document, DocumentIngestion
 from app.models.evaluation import EvaluationSession, PipelineAnswer, QuestionRound
 from app.models.pipeline import ParserType, Pipeline
 from app.models.study import Study
@@ -31,7 +33,9 @@ from app.schemas.admin import (
     RespostaDetalhe,
     RodadaAdmin,
 )
+from app.schemas.document import ContextoLLM, DocumentoAdmin
 from app.services.analise import analisar_estudo, e_avancado, resposta_correta
+from app.services.contexto_llm import IngestaoDoContexto, para_contexto, resumir_contexto
 from app.services.ragas_rodadas import (
     calcular_em_segundo_plano,
     calcular_notas,
@@ -51,6 +55,33 @@ def _obter_estudo(sessao: Session, study_id: uuid.UUID) -> Study:
     if estudo is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Estudo não encontrado.")
     return estudo
+
+
+@router.get("/documents")
+def listar_documentos_admin(sessao: SessionDep) -> list[DocumentoAdmin]:
+    """O acervo com a fracao de cada documento que vai ao LLM nos pipelines ativos.
+
+    Rota propria porque `GET /api/documents` tambem serve o avaliador. Duas consultas para a
+    listagem toda: documentos e, de uma vez, as ingestoes de todos eles.
+    """
+    documentos = sessao.exec(select(Document).order_by(Document.criado_em)).all()
+    linhas = sessao.exec(
+        select(DocumentIngestion, Pipeline)
+        .join(Pipeline, Pipeline.id == DocumentIngestion.pipeline_id)  # type: ignore[arg-type]
+        .where(Pipeline.ativo)
+    ).all()
+    por_documento: dict[uuid.UUID, list[IngestaoDoContexto]] = defaultdict(list)
+    for ingestao, pipeline in linhas:
+        por_documento[ingestao.document_id].append(para_contexto(ingestao, pipeline))
+
+    resultado = []
+    for documento in documentos:
+        resumo = resumir_contexto(por_documento.get(documento.id, []))
+        contexto = ContextoLLM(**asdict(resumo)) if resumo is not None else None
+        resultado.append(
+            DocumentoAdmin.model_validate({**documento.model_dump(), "contexto": contexto})
+        )
+    return resultado
 
 
 @router.get("/studies/{study_id}/avaliacoes")

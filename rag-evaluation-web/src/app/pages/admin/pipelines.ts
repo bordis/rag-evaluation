@@ -79,7 +79,8 @@ export class AdminPipelines {
           nome: String(dados.get('nome')),
           parser: dados.get('parser') as PipelineAdmin['parser'],
           collection_name: String(dados.get('collection_name')),
-          config: { top_k: 15 },
+          // Padrão do estudo, igual ao da semeadura: 6 chunks no contexto, 2 âncoras (±1 vizinho).
+          config: { top_k: 6, ancoras: 2 },
         }),
       ),
     );

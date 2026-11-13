@@ -1,7 +1,8 @@
 """Calcula o RAGAS sobre rodadas ja gravadas. Fica fora do fluxo do avaliador: e lento e custa caro.
 
-Com 15 trechos, a precisao de contexto faz uma chamada ao juiz por trecho, entao uma rodada
-consome dezenas de chamadas. Por isso o disparo e sempre uma acao explicita do administrador.
+A precisao de contexto faz uma chamada ao juiz por trecho (RAG_SEARCH_LIMIT por resposta), e
+somadas as demais metricas dos 4 pipelines uma rodada consome dezenas de chamadas. Por isso o
+disparo e sempre uma acao explicita do administrador.
 """
 
 import asyncio

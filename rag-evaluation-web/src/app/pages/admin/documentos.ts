@@ -2,6 +2,11 @@ import { ChangeDetectionStrategy, Component, inject, type OnDestroy, signal } fr
 
 import { ApiAdmin, type DocumentoAdmin, type Ingestao } from '../../services/api-admin';
 import { Ocupado } from '../../services/ocupado';
+import {
+  AJUDA_CONTEXTO_LLM,
+  formatarContextoDocumento,
+  formatarContextoIngestao,
+} from './contexto-llm';
 
 const INTERVALO_ATUALIZACAO_MS = 5000;
 
@@ -24,6 +29,9 @@ export class AdminDocumentos implements OnDestroy {
   protected readonly enviando = signal(false);
   protected readonly erro = signal<string | null>(null);
   protected readonly ocupado = new Ocupado();
+  protected readonly ajudaContexto = AJUDA_CONTEXTO_LLM;
+  protected readonly contextoDocumento = formatarContextoDocumento;
+  protected readonly contextoIngestao = formatarContextoIngestao;
 
   constructor() {
     void this.atualizar();

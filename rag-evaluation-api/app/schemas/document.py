@@ -33,6 +33,25 @@ class DocumentoResumo(BaseModel):
         return self.arquivo_chave is not None
 
 
+class ContextoLLM(BaseModel):
+    """Fracao do documento entregue ao LLM, calculada das ingestoes concluidas.
+
+    `chunks` e o maior entre os pipelines, `tokens_estimados` a media, e a faixa de percentuais
+    existe porque cada parser gera uma contagem de chunks diferente.
+    """
+
+    chunks: int
+    tokens_estimados: int
+    percentual_min: float
+    percentual_max: float
+
+
+class DocumentoAdmin(DocumentoResumo):
+    """So em `GET /api/admin/documents`: a listagem do avaliador continua sem dados de ingestao."""
+
+    contexto: ContextoLLM | None
+
+
 class DocumentoDetalhe(DocumentoResumo):
     nome_arquivo_original: str
     mime_type: str
@@ -63,3 +82,7 @@ class IngestaoResumo(BaseModel):
     duracao_total_ms: int
     iniciado_em: datetime | None
     concluido_em: datetime | None
+    # min(top_k, total_chunks) e a fracao do documento que isso representa; 0 e None enquanto a
+    # ingestao nao estiver concluida com chunks.
+    contexto_chunks: int
+    contexto_percentual: float | None

@@ -79,16 +79,23 @@ class Settings(BaseSettings):
     ragas_timeout_seconds: int = 120
 
     # RAG
-    # Chunks entregues ao LLM nos 4 pipelines (decisao 4 da ficha).
-    rag_search_limit: int = 15
-    # Ancoras antes dos vizinhos nos pipelines 3 e 4.
-    rag_ancoras: int = 5
+    # Chunks entregues ao LLM nos 4 pipelines (decisao 4 da ficha). A busca e filtrada por
+    # documento; um documento de 20-30 paginas da, por estimativa, 50-100 chunks de 256 tokens.
+    # Com 15, o LLM via 15-30% do documento e a busca densa simples ja acertava quase sempre
+    # (efeito teto). Com 6 (~1.500 tokens, 6-12% estimados) sobra espaco para o fator B. Custo:
+    # perguntas de sintese ficam mais dificeis nos 4 pipelines. Mudar nao exige reingestao, mas
+    # vale so na semeadura: pipelines ja semeados leem top_k/ancoras da propria config no banco.
+    rag_search_limit: int = 6
+    # Ancoras antes dos vizinhos nos pipelines 3 e 4. ancoras x (2 x janela + 1) = rag_search_limit:
+    # 2 ancoras +-1 vizinho = 6.
+    rag_ancoras: int = 2
     # Em tokens (cl100k_base), cortando em fim de frase. Sem sobreposicao: o que ela atenuaria e o
     # que os vizinhos do fator B tratam, e os vizinhos repetiriam o texto sobreposto no contexto.
     chunk_size: int = 256
     chunk_overlap: int = 0
-    # 15 ja garantem completar o contexto; os 5 a mais dao margem para a reordenacao. Em CPU, cada
-    # candidato custa quase 1 s de espera para o avaliador, entao mais que isso pesa na coleta.
+    # A reordenacao escolhe as ancoras entre estes candidatos (2 entre 20: uma selecao de fato), e
+    # os seguintes do ranking completam o contexto se os vizinhos faltarem. Em CPU, cada candidato
+    # custa quase 1 s de espera para o avaliador, entao mais que isso pesa na coleta.
     rerank_candidates: int = 20
     sliding_window_size: int = 1
     # A reordenacao forma fila: com avaliadores simultaneos, a espera se soma.

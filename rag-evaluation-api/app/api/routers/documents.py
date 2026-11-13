@@ -36,6 +36,7 @@ from app.schemas.document import (
     DocumentoResumo,
     IngestaoResumo,
 )
+from app.services.contexto_llm import contexto_da_ingestao, para_contexto
 from app.services.ingestion import executar_ingestao, retrato_da_ingestao
 
 router = APIRouter(prefix="/api/documents", tags=["documentos"])
@@ -228,25 +229,30 @@ def listar_ingestoes(sessao: SessionDep, documento_id: uuid.UUID) -> list[Ingest
         .where(DocumentIngestion.document_id == documento_id)
         .order_by(Pipeline.codigo)  # type: ignore[arg-type]
     ).all()
-    return [
-        IngestaoResumo(
-            pipeline_codigo=pipeline.codigo,
-            pipeline_nome=pipeline.nome,
-            status=ingestao.status,
-            erro=ingestao.erro,
-            total_caracteres=ingestao.total_caracteres,
-            total_chunks=ingestao.total_chunks,
-            tokens_embedding=ingestao.tokens_embedding,
-            duracao_parsing_ms=ingestao.duracao_parsing_ms,
-            duracao_chunking_ms=ingestao.duracao_chunking_ms,
-            duracao_embedding_ms=ingestao.duracao_embedding_ms,
-            duracao_indexacao_ms=ingestao.duracao_indexacao_ms,
-            duracao_total_ms=ingestao.duracao_total_ms,
-            iniciado_em=ingestao.iniciado_em,
-            concluido_em=ingestao.concluido_em,
+    resumos = []
+    for ingestao, pipeline in linhas:
+        contexto = contexto_da_ingestao(para_contexto(ingestao, pipeline))
+        resumos.append(
+            IngestaoResumo(
+                pipeline_codigo=pipeline.codigo,
+                pipeline_nome=pipeline.nome,
+                status=ingestao.status,
+                erro=ingestao.erro,
+                total_caracteres=ingestao.total_caracteres,
+                total_chunks=ingestao.total_chunks,
+                tokens_embedding=ingestao.tokens_embedding,
+                duracao_parsing_ms=ingestao.duracao_parsing_ms,
+                duracao_chunking_ms=ingestao.duracao_chunking_ms,
+                duracao_embedding_ms=ingestao.duracao_embedding_ms,
+                duracao_indexacao_ms=ingestao.duracao_indexacao_ms,
+                duracao_total_ms=ingestao.duracao_total_ms,
+                iniciado_em=ingestao.iniciado_em,
+                concluido_em=ingestao.concluido_em,
+                contexto_chunks=contexto.chunks,
+                contexto_percentual=contexto.percentual,
+            )
         )
-        for ingestao, pipeline in linhas
-    ]
+    return resumos
 
 
 @router.delete(

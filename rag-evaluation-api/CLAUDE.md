@@ -67,8 +67,14 @@ identical across all four on purpose; varying them would confound the variables.
 - **Docling reports `success` when the VLM fails.** `_imagens_sem_descricao` turns a large picture with no description
   into an ingestion error; otherwise factor A would silently change. The docling-serve needs
   `DOCLING_SERVE_ENABLE_REMOTE_SERVICES` and must reach `CHAT_BASE_URL`: it is the one that calls the vision model.
-- **Every pipeline delivers the same 15 chunks.** Advanced arms: 20 candidates → re-rank → 5 anchors + neighbours, then
+- **Every pipeline delivers the same 6 chunks.** Advanced arms: 20 candidates → re-rank → 2 anchors + neighbours, then
   `_completar_contexto` fills up with the next ranked candidates. Documents with fewer chunks deliver what exists.
+  Was 15/5: with search filtered per document (est. 50–100 chunks for 20–30 pages), 15 chunks gave the LLM 15–30%
+  of the document, dense search alone almost always hit (ceiling effect) and the re-ranker barely filtered. Keep
+  anchors × (2·window + 1) = total. **`.env` only reaches pipelines at seeding:** seeded rows keep `top_k`/`ancoras`
+  in `Pipeline.config`, which wins over settings; change them via `PUT /api/pipelines/{id}` (409 while a study is open).
+  `GET /api/admin/documents` reports the real fraction per document (`services/contexto_llm.py`, pure); it is a
+  separate route because `GET /api/documents` (`DocumentoResumo`) also serves the evaluator.
 - **HyDE only touches the dense leg.** The vector is the mean of hypothetical + question; BM25 and the re-ranker see the question.
 - **The re-ranker has no fallback.** It is an external service speaking `/v1/rerank` (Jina/Cohere shape, what vLLM
   serves); `RERANKER_URL` is the full endpoint and `RERANKER_KEY` goes as Bearer. Falling back to search order would

@@ -49,6 +49,7 @@
       <th>Páginas</th>
       <th>Tabelas</th>
       <th>Imagens</th>
+      <th [attr.title]="ajudaContexto" aria-describedby="contexto-llm-ajuda">Contexto ao LLM</th>
       <th>PDF</th>
       <th>Ações</th>
     </tr>
@@ -70,6 +71,7 @@
         <td>{{ documento.paginas ?? '—' }}</td>
         <td>{{ documento.tabelas ?? '—' }}</td>
         <td>{{ documento.imagens ?? '—' }}</td>
+        <td>{{ contextoDocumento(documento.contexto) }}</td>
         <td>
           @if (documento.pdf_disponivel) {
             Guardado
@@ -130,7 +132,7 @@
       </tr>
       @if (aberto() === documento.id) {
         <tr>
-          <td colspan="8">
+          <td colspan="9">
             <table class="adm-tabela adm-tabela--interna">
               <thead>
                 <tr>
@@ -138,6 +140,7 @@
                   <th>Status</th>
                   <th>Chunks</th>
                   <th>Tokens</th>
+                  <th>Contexto</th>
                   <th>Parsing (ms)</th>
                   <th>Total (ms)</th>
                   <th>Erro</th>
@@ -150,6 +153,7 @@
                     <td>{{ item.status }}</td>
                     <td>{{ item.total_chunks }}</td>
                     <td>{{ item.tokens_embedding }}</td>
+                    <td>{{ contextoIngestao(item.contexto_chunks, item.contexto_percentual) }}</td>
                     <td>{{ item.duracao_parsing_ms }}</td>
                     <td>{{ item.duracao_total_ms }}</td>
                     <td>{{ item.erro }}</td>
@@ -162,8 +166,9 @@
       }
     } @empty {
       <tr>
-        <td colspan="8">Nenhum documento enviado.</td>
+        <td colspan="9">Nenhum documento enviado.</td>
       </tr>
     }
   </tbody>
 </table>
+<p id="contexto-llm-ajuda" class="adm-pequeno">Contexto ao LLM: {{ ajudaContexto }}</p>

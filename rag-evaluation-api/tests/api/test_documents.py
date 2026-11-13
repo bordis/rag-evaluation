@@ -258,6 +258,93 @@ def test_ingestions_devolvem_telemetria_por_pipeline(cliente, sessao):
     ]
     assert corpo[0]["total_chunks"] == 12
     assert corpo[0]["tokens_embedding"] == 340
+    top_k = (
+        sessao.exec(select(Pipeline).where(Pipeline.codigo == "pipeline-1")).one().config["top_k"]
+    )
+    assert corpo[0]["contexto_chunks"] == min(top_k, 12)
+    assert corpo[0]["contexto_percentual"] == round(100 * min(top_k, 12) / 12, 1)
+
+
+def test_ingestions_sem_conclusao_nao_tem_fracao_do_contexto(cliente, sessao):
+    documento = _documento(sessao)
+    pipeline = sessao.exec(select(Pipeline).where(Pipeline.codigo == "pipeline-1")).one()
+    sessao.add(DocumentIngestion(document_id=documento.id, pipeline_id=pipeline.id))
+    sessao.commit()
+
+    corpo = cliente.get(f"/api/documents/{documento.id}/ingestions").json()
+
+    assert corpo[0]["contexto_chunks"] == 0
+    assert corpo[0]["contexto_percentual"] is None
+
+
+def _ingerir(sessao: Session, documento: Document, chunks_por_codigo: dict[str, int]) -> None:
+    for pipeline in sessao.exec(select(Pipeline)).all():
+        pipeline.config = {**pipeline.config, "top_k": 6}
+        sessao.add(pipeline)
+        total = chunks_por_codigo.get(pipeline.codigo)
+        sessao.add(
+            DocumentIngestion(
+                document_id=documento.id,
+                pipeline_id=pipeline.id,
+                status=StatusIngestao.CONCLUIDA if total else StatusIngestao.ERRO,
+                total_chunks=total or 0,
+                tokens_embedding=(total or 0) * 240,
+            )
+        )
+    sessao.commit()
+
+
+def test_listagem_do_admin_traz_a_fracao_do_documento_no_contexto(cliente, sessao):
+    documento = _documento(sessao)
+    _ingerir(sessao, documento, {"pipeline-1": 85, "pipeline-2": 64, "pipeline-3": 85})
+    _documento(sessao, slug="novo", sha256="d" * 64)
+
+    resposta = cliente.get("/api/admin/documents")
+
+    assert resposta.status_code == 200
+    corpo = {item["slug"]: item for item in resposta.json()}
+    assert corpo["lgpd"]["contexto"] == {
+        "chunks": 6,
+        "tokens_estimados": 1440,
+        "percentual_min": 7.1,
+        "percentual_max": 9.4,
+    }
+    assert corpo["novo"]["contexto"] is None
+    assert "pdf_disponivel" in corpo["lgpd"]
+    assert "arquivo_chave" not in corpo["lgpd"]
+
+
+def test_listagem_do_admin_ignora_pipeline_inativo(cliente, sessao):
+    documento = _documento(sessao)
+    _ingerir(sessao, documento, {"pipeline-1": 60, "pipeline-2": 30})
+    segundo = sessao.exec(select(Pipeline).where(Pipeline.codigo == "pipeline-2")).one()
+    segundo.ativo = False
+    sessao.add(segundo)
+    sessao.commit()
+
+    contexto = cliente.get("/api/admin/documents").json()[0]["contexto"]
+
+    assert contexto["percentual_min"] == contexto["percentual_max"] == 10.0
+
+
+def test_listagem_do_avaliador_nao_traz_dados_de_ingestao(cliente, sessao):
+    documento = _documento(sessao, status=StatusDocumento.PRONTO)
+    _ingerir(sessao, documento, {"pipeline-1": 60})
+
+    corpo = cliente.get("/api/documents", params={"status": "pronto"}).json()
+
+    assert "contexto" not in corpo[0]
+
+
+def test_listagem_do_admin_exige_admin(cliente):
+    from app.core.auth import ROLE_AVALIADOR, Usuario, usuario_atual
+    from app.main import app
+
+    app.dependency_overrides[usuario_atual] = lambda: Usuario(
+        sub="so-avaliador", roles=frozenset({ROLE_AVALIADOR})
+    )
+
+    assert cliente.get("/api/admin/documents").status_code == 403
 
 
 def test_exclusao_limpa_as_quatro_collections_e_o_banco(cliente, sessao, monkeypatch):

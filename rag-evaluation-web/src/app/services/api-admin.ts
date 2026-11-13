@@ -27,6 +27,20 @@ export interface DocumentoAdmin {
   imagens: number | null;
   criado_em: string;
   pdf_disponivel: boolean;
+  /** Quanto do documento chega ao LLM; `null` enquanto nenhum pipeline concluiu a ingestão. */
+  contexto: ContextoDocumento | null;
+}
+
+/**
+ * Contexto entregue ao LLM em cada resposta, calculado pelo servidor com a ingestão real.
+ * Os percentuais (0–100, uma casa) formam a faixa entre os pipelines: os parsers geram contagens
+ * de chunks diferentes para o mesmo documento. Serve para detectar efeito teto.
+ */
+export interface ContextoDocumento {
+  chunks: number;
+  tokens_estimados: number;
+  percentual_min: number;
+  percentual_max: number;
 }
 
 export interface Ingestao {
@@ -37,6 +51,10 @@ export interface Ingestao {
   tokens_embedding: number;
   duracao_parsing_ms: number;
   duracao_total_ms: number;
+  /** Chunks entregues ao LLM por este pipeline. */
+  contexto_chunks: number;
+  /** `contexto_chunks ÷ total_chunks` em % (0–100); `null` sem ingestão concluída. */
+  contexto_percentual: number | null;
 }
 
 export interface PipelineAdmin {
@@ -440,7 +458,8 @@ export class ApiAdmin {
   }
 
   listarDocumentos(): Promise<DocumentoAdmin[]> {
-    return chamarApi(this.http.get<DocumentoAdmin[]>(`${this.base}/documents`));
+    // Rota própria do admin: só ela traz `contexto`; `/documents` também serve o avaliador.
+    return chamarApi(this.http.get<DocumentoAdmin[]>(`${this.base}/admin/documents`));
   }
 
   enviarDocumento(dados: FormData): Promise<unknown> {

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.models.document import Document, StatusDocumento
 from app.models.evaluation import PipelineAnswer, QuestionRound, RoundFailure
 from app.models.pipeline import Pipeline
@@ -231,7 +232,7 @@ def test_config_gravada_na_resposta_nao_muda_com_edicao_posterior(cliente, sessa
         for item in detalhe["rodadas"][0]["respostas"]
         if item["pipeline_codigo"] == "pipeline-3"
     )
-    assert resposta["config_snapshot"]["top_k"] == 15
+    assert resposta["config_snapshot"]["top_k"] == get_settings().rag_search_limit
 
 
 # Visao do pesquisador

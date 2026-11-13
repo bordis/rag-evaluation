@@ -32,9 +32,9 @@ rótulos A/B/C/D de novo, então a posição também não é pista.
 
 | Parâmetro | Valor |
 | --- | --- |
-| Contexto entregue ao LLM | **15 chunks nos 4 pipelines** |
-| Pipelines 1 e 2 | busca densa, `top_k` 15 |
-| Pipelines 3 e 4 | 20 candidatos → reordenação → 5 âncoras + vizinhos (±1); se faltar, os próximos do ranking completam 15 |
+| Contexto entregue ao LLM | **6 chunks nos 4 pipelines** (≈ 1.500 tokens) |
+| Pipelines 1 e 2 | busca densa, `top_k` 6 |
+| Pipelines 3 e 4 | 20 candidatos → reordenação → 2 âncoras + vizinhos (±1); se faltar, os próximos do ranking completam 6 |
 | HyDE | média dos vetores do parágrafo hipotético e da pergunta; o BM25 usa só a pergunta |
 | Fusão híbrida | `RRFRanker` (k = 60), padrão do Milvus; BM25 com k1 = 1,2 e b = 0,75 |
 | Reordenador | `bge-reranker-v2-m3`, em serviço próprio no formato `/v1/rerank`, recebendo a pergunta original |
@@ -44,6 +44,20 @@ rótulos A/B/C/D de novo, então a posição também não é pista.
 | Geração | `CHAT_MODEL`, temperatura 0,3, até 1024 tokens |
 | Embedding | `EMBEDDING_MODEL` para os trechos e `EMBEDDING_MODEL_QUERY` para a pergunta, com `EMBEDDING_DIMENSIONS` dimensões |
 | Juiz RAGAS | `RAGAS_LLM_MODEL`, sempre diferente do modelo de geração |
+
+**Por que 6 chunks.** A busca é filtrada por documento, então o acervo de cada pergunta é um único
+documento. Um documento de 20 a 30 páginas rende, por estimativa (600 a 900 tokens por página em
+português), de 50 a 100 chunks de 256 tokens; o valor medido de cada documento aparece na listagem
+de documentos da área de administração. Com 15 chunks, o LLM recebia de 15% a 30% do documento: a
+busca densa simples (pipelines 1 e 2) quase sempre já trazia o trecho certo, e restava pouco para o
+retrieval avançado ganhar (efeito teto). Com 20 candidatos para 15 entregues, a reordenação quase
+não filtrava, e o contexto dos pipelines 3 e 4 era praticamente o mesmo dos pipelines 1 e 2. Com 6
+chunks, o LLM recebe cerca de 1.500 tokens (de 6% a 12% do documento, estimados) e o reordenador
+escolhe 2 âncoras entre 20, uma seleção de fato. A relação âncoras × (2 · janela + 1) = total se
+mantém: 2 âncoras ± 1 vizinho = 6 (antes, 5 × 3 = 15). O custo assumido é que perguntas de síntese,
+que dependem de vários trechos espalhados, ficam mais difíceis nos quatro pipelines; a alternativa
+intermediária seria 9 chunks e 3 âncoras. A mudança não exige reingestão (só `CHUNK_SIZE` e
+`CHUNK_OVERLAP` exigem).
 
 ## Fluxo do avaliador
 
@@ -174,8 +188,8 @@ RAGAS_LLM_SEM_RACIOCINIO=false
 RAGAS_TIMEOUT_SECONDS=120
 
 # RAG e limites do estudo
-RAG_SEARCH_LIMIT=15
-RAG_ANCORAS=5
+RAG_SEARCH_LIMIT=6
+RAG_ANCORAS=2
 CHUNK_SIZE=256
 CHUNK_OVERLAP=0
 RERANK_CANDIDATES=20
@@ -208,7 +222,7 @@ mantenha-as no arquivo para deixar a configuração do estudo explícita.
 | `RAGAS_LLM_MODEL` / `RAGAS_LLM_URL` / `RAGAS_LLM_KEY` | Modelo juiz do RAGAS, o endpoint dele (terminando em `/v1`) e a chave. O juiz é diferente do modelo de geração para evitar autopromoção. Sem `RAGAS_LLM_KEY`, vale `CHAT_API_KEY`. |
 | `RAGAS_LLM_SEM_RACIOCINIO` | `true` quando o juiz é um modelo de raciocínio servido por vLLM/SGLang (DeepSeek, Qwen): envia `chat_template_kwargs.enable_thinking=false`. Ligado, o juiz responde cerca de 7× mais rápido. Desligado, o raciocínio esgota o `max_tokens` nas respostas longas e a nota sai com `IncompleteOutputException`. Deixe `false` na API da OpenAI, que rejeita o parâmetro. |
 | `RAGAS_TIMEOUT_SECONDS` | Limite de cada chamada ao juiz. Sem ele, uma chamada sem resposta prenderia o lote por até 30 min. |
-| `RAG_SEARCH_LIMIT` / `RAG_ANCORAS` | Chunks entregues ao LLM e âncoras dos pipelines 3 e 4, na semeadura. |
+| `RAG_SEARCH_LIMIT` / `RAG_ANCORAS` | Chunks entregues ao LLM e âncoras dos pipelines 3 e 4, na semeadura. Só valem para pipelines criados depois: os já semeados guardam `top_k` e `ancoras` na própria configuração, que se altera na tela de pipelines da administração (com o estudo encerrado). |
 | `RERANKER_URL` / `RERANKER_KEY` | Endpoint completo do reordenador (`.../v1/rerank`) e a chave, enviada como `Authorization: Bearer`. O nome do modelo e os tokens gravados na telemetria vêm da resposta do serviço. |
 | `DOCLING_PDF_BACKEND` / `DOCLING_TABLE_MODE` | Backend de leitura do PDF e modo de extração de tabelas. Afetam o parser, um dos fatores do estudo: não altere depois de ingerir os documentos. |
 | `DOCLING_DESCREVER_IMAGENS` / `DOCLING_IMAGEM_AREA_MINIMA` / `DOCLING_IMAGEM_MODELO` | Se as imagens são descritas, a área mínima (fração da página) para descrever e o modelo usado. Também afetam o parser. |
@@ -344,7 +358,7 @@ chamadas por rodada.
 | `POST` `GET` | `/api/documents` | Upload de PDF (**202**) e listagem; o avaliador filtra por `status=pronto`. |
 | `GET` `DELETE` | `/api/documents/{id}` | Detalhe e remoção. |
 | `GET` `PUT` | `/api/documents/{id}/arquivo` | Abre o PDF guardado; o `PUT` anexa o arquivo a um documento antigo, sem refazer a ingestão. |
-| `GET` | `/api/documents/{id}/ingestions` | Telemetria de ingestão por pipeline. |
+| `GET` | `/api/documents/{id}/ingestions` | Telemetria de ingestão por pipeline, com `contexto_chunks` e `contexto_percentual` (fração do documento entregue ao LLM). |
 | `GET` `POST` | `/api/pipelines` | CRUD dos pipelines. |
 | `GET` `PUT` `DELETE` | `/api/pipelines/{id}` | CRUD dos pipelines. |
 | `POST` | `/api/sessions` | Cria a sessão: `{"aceite": true, "termo_versao": "..."}`. |
@@ -353,6 +367,7 @@ chamadas por rodada.
 | `GET` | `/api/sessions/{sid}/documents/{slug}/rounds` | Histórico, para reidratar o chat. |
 | `POST` | `/api/rounds/{id}/choice` | Escolha e tempos; `rotulo: null` = nenhuma está correta. |
 | `POST` | `/api/rounds/{id}/also-correct` | Segundo passo: `{"rotulos": ["B", "D"], "tempo_marcacao_ms": ..., "tempo_marcacao_oculto_ms": ...}`; lista vazia = nenhuma das outras está correta. Só em rodada decidida com vencedora e ainda sem marcação. |
+| `GET` | `/api/admin/documents` | Acervo do pesquisador: a listagem de documentos mais `contexto` (chunks entregues ao LLM, tokens estimados e faixa do percentual do documento entre os pipelines ativos). |
 | `GET` | `/api/admin/studies/{id}/avaliacoes` | Ciclos do estudo. |
 | `GET` | `/api/admin/avaliacoes/{sid}/{documentId}` | Detalhe completo de um ciclo. |
 | `GET` | `/api/admin/studies/{id}/stats` | Análise do estudo. |
